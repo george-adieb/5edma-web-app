@@ -37,7 +37,7 @@ function AddStudentBtn({ onClose }) {
 
 export default function Sidebar({ onClose }) {
   return (
-    <aside className="sidebar">
+    <aside style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Brand */}
       <div style={{
         padding: '14px 14px 12px',
