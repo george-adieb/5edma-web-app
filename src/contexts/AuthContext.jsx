@@ -61,18 +61,15 @@ export function AuthProvider({ children }) {
   // Auth listener setup
   // -------------------------------------------------------------------------
   useEffect(() => {
-    console.log('[AuthContext] useEffect START');
     // Clean up any previous subscription from a Strict Mode first-mount
     if (subscriptionRef.current) {
-      console.log('[AuthContext] unsubscribing previous onAuthStateChange');
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
     // Reset resolution flag on each (re)mount
     resolvedRef.current = false;
 
-    // Hard timeout safety net — if INITIAL_SESSION never fires (network issue,
-    // Supabase outage, corrupt storage), we unblock the UI after AUTH_TIMEOUT_MS.
+    // Hard timeout safety net
     timeoutRef.current = setTimeout(() => {
       if (!resolvedRef.current) {
         console.warn('[AuthContext] Auth timeout — forcing loading=false after', AUTH_TIMEOUT_MS, 'ms');
@@ -84,71 +81,75 @@ export function AuthProvider({ children }) {
       }
     }, AUTH_TIMEOUT_MS);
 
-    console.log('[AuthContext] Setting up onAuthStateChange listener');
+    // Actively get the session instead of just waiting for INITIAL_SESSION
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (!resolvedRef.current) {
+          resolvedRef.current = true;
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          if (currentUser) {
+            await fetchProfile(currentUser.id);
+          }
+          resolveLoading();
+        }
+      } catch (err) {
+        console.error('[AuthContext] getSession error:', err.message);
+        if (!resolvedRef.current) {
+          resolvedRef.current = true;
+          resolveLoading();
+        }
+      }
+    };
+
+    initializeAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log(`[AuthContext] onAuthStateChange FIRED: event=${event}, hasSession=${!!session}`);
         const currentUser = session?.user ?? null;
 
         switch (event) {
           case 'INITIAL_SESSION': {
-            // Guard: only handle the very first fire (Strict Mode can re-register
-            // the listener which would fire INITIAL_SESSION twice)
-            if (resolvedRef.current) {
-              console.log('[AuthContext] INITIAL_SESSION ignored (already resolved)');
-              break;
-            }
-            console.log('[AuthContext] INITIAL_SESSION handling');
-            resolvedRef.current = true;
-
-            setUser(currentUser);
-            if (currentUser) {
-              await fetchProfile(currentUser.id);
-            }
-            console.log('[AuthContext] INITIAL_SESSION resolving loading');
-            resolveLoading();
-            break;
-          }
-
-          case 'SIGNED_IN': {
-            console.log('[AuthContext] SIGNED_IN handling');
-            setUser(currentUser);
-            if (currentUser) {
-              await fetchProfile(currentUser.id);
-            }
-            // Also resolve loading in case INITIAL_SESSION was skipped
             if (!resolvedRef.current) {
               resolvedRef.current = true;
-              console.log('[AuthContext] SIGNED_IN resolving loading');
+              setUser(currentUser);
+              if (currentUser) {
+                await fetchProfile(currentUser.id);
+              }
               resolveLoading();
             }
             break;
           }
-
+          case 'SIGNED_IN': {
+            setUser(currentUser);
+            if (currentUser) {
+              await fetchProfile(currentUser.id);
+            }
+            if (!resolvedRef.current) {
+              resolvedRef.current = true;
+              resolveLoading();
+            }
+            break;
+          }
           case 'USER_UPDATED':
-            console.log('[AuthContext] USER_UPDATED handling');
             setUser(currentUser);
             if (currentUser) {
               fetchProfile(currentUser.id); // fire-and-forget, non-blocking
             }
             break;
-
           case 'TOKEN_REFRESHED':
-            console.log('[AuthContext] TOKEN_REFRESHED handling');
-            // Silent background refresh — never touch loading state
             setUser(currentUser);
             break;
-
           case 'SIGNED_OUT':
-            console.log('[AuthContext] SIGNED_OUT handling');
             setUser(null);
             setProfile(null);
             resolvedRef.current = true;
             resolveLoading();
             break;
-
           default:
-            console.log(`[AuthContext] Unknown event: ${event}`);
             break;
         }
       }
@@ -156,17 +157,7 @@ export function AuthProvider({ children }) {
 
     subscriptionRef.current = subscription;
 
-    console.log('[AuthContext] Calling getSession manually');
-    supabase.auth.getSession().then(({ data, error }) => {
-      console.log('[AuthContext] getSession returned manually:', { hasSession: !!data?.session, error });
-    }).catch(err => {
-      console.error('[AuthContext] getSession manual call thrown error:', err);
-    });
-
     return () => {
-      console.log('[AuthContext] useEffect cleanup');
-      // On cleanup (true unmount OR Strict Mode first-mount teardown),
-      // always unsubscribe so the next mount starts fresh.
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe();
         subscriptionRef.current = null;
