@@ -87,20 +87,7 @@ export default function LoginPage() {
             src="/church-logo.png" 
             alt="شعار كنيسة مارجرجس سيدي بشر" 
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            onError={(e) => {
-              // Fallback to placeholder if image fails to load for any reason
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextSibling.style.display = 'flex';
-            }}
           />
-          {/* Fallback styling in case image doesn't exist yet */}
-          <div style={{
-            display: 'none', width: '64px', height: '64px', borderRadius: '14px',
-            background: '#111827', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #D4AF37, #AA841A)', borderRadius: '50%' }} />
-          </div>
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#8B1A1A', lineHeight: 1.3 }}>
           كنيسة الشهيد العظيم <br/> مارجرجس سيدي بشر
