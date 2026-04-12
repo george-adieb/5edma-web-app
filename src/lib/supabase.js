@@ -13,5 +13,13 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'sb-auth-token',
+    // Bypass the Web Locks API to prevent infinite hanging on mobile/background tabs.
+    // gotrue-js mimics navigator.locks.request which can take 2 or 3 arguments:
+    // (name, callback) OR (name, options, callback). 
+    // We dynamically find the callback to avoid "acquire is not a function" errors.
+    lock: async (...args) => {
+      const callback = args.find(arg => typeof arg === 'function');
+      if (callback) return await callback();
+    },
   },
 });
