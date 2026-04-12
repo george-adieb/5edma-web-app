@@ -13,10 +13,5 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'sb-auth-token',
-    // Bypass the Web Locks API completely because it causes indefinite hanging
-    // in some browser environments when tabs are backgrounded/foregrounded.
-    lock: async (name, acquire) => {
-      return await acquire();
-    },
   },
 });
