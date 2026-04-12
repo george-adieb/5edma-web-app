@@ -11,33 +11,25 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading, logout } = useAuth();
 
-  // Redirect if already logged in and profile is loaded
+  // Stop loading indicator if sign in completes
   useEffect(() => {
-    if (user && profile) {
-      const role = profile.role;
-      console.log('Redirecting based on role:', role);
-      
-      switch (role) {
-        case 'ADMIN':
-          navigate('/', { replace: true });
-          break;
-        case 'GENERAL_SECRETARIAT':
-          navigate('/', { replace: true });
-          break;
-        case 'SERVICE_HEAD':
-          navigate('/', { replace: true });
-          break;
-        case 'STAGE_SERVANT':
-          navigate('/', { replace: true });
-          break;
-        default:
-          navigate('/', { replace: true });
-          break;
+    if (user && !authLoading) {
+      if (profile) {
+        // Redirection based on role
+        const role = profile.role;
+        console.log('Redirecting based on role:', role);
+        navigate('/', { replace: true });
+      } else {
+        // Edge case: User authenticated successfully, but no profile row exists in Supabase
+        setErrorMsg('تم تسجيل الدخول لكن لا توجد صلاحيات / ملف شخصي. يرجى مراجعة المشرف.');
+        setIsLoading(false);
+        // We probably want to sign them out so they aren't stuck halfway
+        logout();
       }
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, authLoading, navigate, logout]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -59,9 +51,15 @@ export default function LoginPage() {
       console.error('Login error:', error);
       setErrorMsg('البريد الإلكتروني أو كلمة المرور غير صحيحة');
       setIsLoading(false);
+    } else {
+      // If error is null, it means sign in was successful.
+      // We rely on the useEffect above to catch the `user` and `profile` updates 
+      // via AuthContext and redirect.
+      // BUT as a safety net in case onAuthStateChange is acting up:
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 10000); // Stop spinning after 10s regardless.
     }
-    // If successful, onAuthStateChange in AuthContext will trigger, 
-    // fetch the profile, set the state, and the useEffect above will redirect automatically.
   };
 
   return (
