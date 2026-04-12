@@ -13,11 +13,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'sb-auth-token',
-    // Do NOT override the lock mechanism.
-    // The previous custom lock using navigator.locks.request({ ifAvailable: false })
-    // caused indefinite blocking: when a lock was already held (e.g. by a concurrent
-    // token refresh), the request queued forever → INITIAL_SESSION never fired →
-    // loading screen got stuck permanently.
-    // Supabase's built-in lock implementation handles this correctly on its own.
+    // Bypass the Web Locks API completely because it causes indefinite hanging
+    // in some browser environments when tabs are backgrounded/foregrounded.
+    lock: async (name, acquire) => {
+      return await acquire();
+    },
   },
 });
