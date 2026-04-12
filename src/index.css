@@ -37,46 +37,41 @@ body {
 }
 
 /* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
-/* Animations */
+/* ─── Animations ──────────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2); opacity: 0; }
+  0%   { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2);   opacity: 0; }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease forwards;
-}
+.animate-fade-in  { animation: fadeIn  0.3s ease forwards; }
+.animate-slide-in { animation: slideIn 0.3s ease forwards; }
 
-.animate-slide-in {
-  animation: slideIn 0.3s ease forwards;
-}
-
-/* Layout */
+/* ─── App Layout ──────────────────────────────────────────────────── */
 .app-layout {
   display: flex;
   min-height: 100vh;
@@ -89,15 +84,14 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
-  .main-content {
-    margin-right: 0;
-  }
+  .main-content { margin-right: 0; }
 }
 
-/* Sidebar */
+/* ─── Sidebar ─────────────────────────────────────────────────────── */
 .sidebar {
   width: var(--sidebar-width);
   background: #FFFFFF;
@@ -111,16 +105,110 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: -2px 0 8px rgba(0,0,0,0.04);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Page content */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(110%);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.18);
+  }
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+}
+
+/* Desktop: always visible */
+@media (min-width: 769px) {
+  .sidebar { transform: translateX(0) !important; }
+}
+
+/* Mobile overlay backdrop */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+  z-index: 40;
+  backdrop-filter: blur(1px);
+  animation: fadeIn 0.2s ease;
+}
+
+/* ─── Page content ────────────────────────────────────────────────── */
 .page-content {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
+  min-width: 0;
 }
 
-/* Status badges */
+@media (max-width: 768px) {
+  .page-content {
+    padding: 14px 12px 80px;
+  }
+}
+
+/* ─── Responsive grid utilities ───────────────────────────────────── */
+.grid-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) {
+  .grid-stats { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .grid-stats { grid-template-columns: 1fr; gap: 10px; }
+}
+
+.grid-two-col {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .grid-two-col { grid-template-columns: 1fr; }
+}
+
+.grid-half {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 768px) {
+  .grid-half { grid-template-columns: 1fr; }
+}
+
+.grid-form-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .grid-form-2 { grid-template-columns: 1fr; }
+}
+
+/* ─── Show / hide helpers ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .mob-hide { display: none !important; }
+}
+
+.mob-show { display: none !important; }
+@media (max-width: 768px) {
+  .mob-show { display: flex !important; }
+}
+
+/* ─── Mobile card table ───────────────────────────────────────────── */
+.mobile-card-list { display: none; }
+.desktop-table    { display: block; }
+
+@media (max-width: 768px) {
+  .mobile-card-list  { display: flex; flex-direction: column; gap: 8px; }
+  .desktop-table     { display: none; }
+}
+
+/* ─── Status badges ───────────────────────────────────────────────── */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -130,33 +218,13 @@ body {
   font-size: 12px;
   font-weight: 600;
 }
+.badge-green  { background: #DCFCE7; color: #16A34A; }
+.badge-red    { background: #FEE2E2; color: #DC2626; }
+.badge-yellow { background: #FEF9C3; color: #B45309; }
+.badge-blue   { background: #DBEAFE; color: #1D4ED8; }
+.badge-gray   { background: #F3F4F6; color: #6B7280; }
 
-.badge-green {
-  background: #DCFCE7;
-  color: #16A34A;
-}
-
-.badge-red {
-  background: #FEE2E2;
-  color: #DC2626;
-}
-
-.badge-yellow {
-  background: #FEF9C3;
-  color: #B45309;
-}
-
-.badge-blue {
-  background: #DBEAFE;
-  color: #1D4ED8;
-}
-
-.badge-gray {
-  background: #F3F4F6;
-  color: #6B7280;
-}
-
-/* Card */
+/* ─── Card ────────────────────────────────────────────────────────── */
 .card {
   background: #FFFFFF;
   border-radius: 12px;
@@ -164,8 +232,11 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   border: 1px solid rgba(229, 231, 235, 0.6);
 }
+@media (max-width: 480px) {
+  .card { padding: 14px; }
+}
 
-/* Button styles */
+/* ─── Buttons ─────────────────────────────────────────────────────── */
 .btn-primary {
   background: var(--church-red);
   color: white;
@@ -180,8 +251,8 @@ body {
   align-items: center;
   gap: 8px;
   transition: all 0.2s ease;
+  min-height: 44px;
 }
-
 .btn-primary:hover {
   background: var(--church-red-dark);
   transform: translateY(-1px);
@@ -202,13 +273,11 @@ body {
   align-items: center;
   gap: 8px;
   transition: all 0.2s ease;
+  min-height: 44px;
 }
+.btn-secondary:hover { background: var(--church-red-muted); }
 
-.btn-secondary:hover {
-  background: var(--church-red-muted);
-}
-
-/* Attendance buttons */
+/* ─── Attendance buttons ─────────────────────────────────────────── */
 .att-btn {
   padding: 8px 16px;
   border-radius: 8px;
@@ -218,43 +287,23 @@ body {
   border: 1.5px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-width: 72px;
+  min-width: 64px;
+  min-height: 40px;
+}
+@media (max-width: 480px) {
+  .att-btn { padding: 7px 10px; font-size: 12px; min-width: 50px; }
 }
 
-.att-btn-present {
-  border-color: #16A34A;
-  color: #16A34A;
-  background: transparent;
-}
+.att-btn-present { border-color: #16A34A; color: #16A34A; background: transparent; }
+.att-btn-present.active, .att-btn-present:hover { background: #16A34A; color: white; }
 
-.att-btn-present.active, .att-btn-present:hover {
-  background: #16A34A;
-  color: white;
-}
+.att-btn-absent { border-color: #DC2626; color: #DC2626; background: transparent; }
+.att-btn-absent.active, .att-btn-absent:hover { background: #DC2626; color: white; }
 
-.att-btn-absent {
-  border-color: #DC2626;
-  color: #DC2626;
-  background: transparent;
-}
+.att-btn-excused { border-color: #D97706; color: #D97706; background: transparent; }
+.att-btn-excused.active, .att-btn-excused:hover { background: #D97706; color: white; }
 
-.att-btn-absent.active, .att-btn-absent:hover {
-  background: #DC2626;
-  color: white;
-}
-
-.att-btn-excused {
-  border-color: #D97706;
-  color: #D97706;
-  background: transparent;
-}
-
-.att-btn-excused.active, .att-btn-excused:hover {
-  background: #D97706;
-  color: white;
-}
-
-/* Input styles */
+/* ─── Inputs ──────────────────────────────────────────────────────── */
 .input-field {
   width: 100%;
   padding: 10px 14px;
@@ -267,70 +316,58 @@ body {
   outline: none;
   transition: border-color 0.2s;
   direction: rtl;
+  min-height: 44px;
 }
-
 .input-field:focus {
   border-color: var(--church-red);
   box-shadow: 0 0 0 3px rgba(139, 26, 26, 0.08);
 }
+.input-field::placeholder { color: #9CA3AF; }
 
-.input-field::placeholder {
-  color: #9CA3AF;
-}
+.search-input { position: relative; }
+.search-input input { padding-right: 40px; }
 
-/* Search input */
-.search-input {
-  position: relative;
-}
-
-.search-input input {
-  padding-right: 40px;
-}
-
-/* Table styles */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
+/* ─── Table styles ────────────────────────────────────────────────── */
+.data-table { width: 100%; border-collapse: collapse; }
 .data-table th {
-  text-align: right;
-  padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  border-bottom: 2px solid var(--border);
-  background: #FAFAFA;
+  text-align: right; padding: 12px 16px;
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  border-bottom: 2px solid var(--border); background: #FAFAFA;
 }
-
 .data-table td {
-  text-align: right;
-  padding: 14px 16px;
-  font-size: 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+  text-align: right; padding: 14px 16px;
+  font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle;
 }
+.data-table tr:hover td { background: #FAFAFA; }
 
-.data-table tr:hover td {
-  background: #FAFAFA;
-}
-
-/* Avatar */
+/* ─── Avatar ──────────────────────────────────────────────────────── */
 .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px;
+  font-family: 'Cairo', sans-serif; flex-shrink: 0;
+}
+
+/* ─── Cross/Church decorative element ────────────────────────────── */
+.church-cross-mark { color: var(--gold); font-size: 18px; }
+
+/* ─── Form action buttons (mobile stacking) ──────────────────────── */
+.mob-form-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 15px;
-  font-family: 'Cairo', sans-serif;
-  flex-shrink: 0;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 4px;
+  flex-wrap: wrap;
 }
-
-/* Cross/Church decorative element */
-.church-cross-mark {
-  color: var(--gold);
-  font-size: 18px;
+@media (max-width: 600px) {
+  .mob-form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .mob-form-actions button {
+    width: 100% !important;
+    justify-content: center;
+  }
 }

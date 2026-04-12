@@ -11,7 +11,7 @@ import { GRADES, REVERSE_GRADE_MAP } from '../data/constants';
 function SectionCard({ icon: Icon, title, children }) {
   return (
     <div style={{
-      background: 'white', borderRadius: '14px', padding: '20px 22px',
+      background: 'white', borderRadius: '14px', padding: '18px 20px',
       border: '1px solid #F3F4F6', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       marginBottom: '16px',
     }}>
@@ -69,6 +69,7 @@ const IS = (err) => ({
   fontSize: '13px', color: '#374151', direction: 'rtl',
   outline: 'none', background: err ? '#FFF5F5' : 'white',
   boxSizing: 'border-box', transition: 'border-color 0.15s',
+  minHeight: '42px',
 });
 
 const SEL = (err) => ({
@@ -271,14 +272,14 @@ export default function EditStudentPage() {
         </div>
       )}
 
-      {/* Two-column grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+      {/* Two-column grid — stacks on mobile */}
+      <div className="grid-half">
 
         {/* ══ RIGHT COLUMN ══ */}
         <div>
           {/* 1. البيانات الأساسية */}
           <SectionCard icon={User} title="البيانات الأساسية">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2">
               <FormGroup label="اسم الشهرة / الكنيسي" optional>
                 <input
                   value={form.nickname}
@@ -303,7 +304,7 @@ export default function EditStudentPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2">
               <FormGroup label="تاريخ الميلاد" optional>
                 <input
                   type="date"
@@ -330,7 +331,7 @@ export default function EditStudentPage() {
               </FormGroup>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2">
               <div data-has-error={!!errors.grade}>
                 <FormGroup label="المرحلة الدراسية" optional>
                   <div style={{ position: 'relative' }}>
@@ -371,7 +372,7 @@ export default function EditStudentPage() {
 
           {/* 2. بيانات ولي الأمر */}
           <SectionCard icon={Phone} title="بيانات ولي الأمر">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2">
               <FormGroup label="صلة القرابة" optional>
                 <select value={form.parentRelation} onChange={e => set('parentRelation', e.target.value)}
                   style={SEL(false)}
@@ -395,7 +396,7 @@ export default function EditStudentPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2">
               <FormGroup label="رقم هاتف إضافي" optional error={errors.parentPhone2}>
                 <input
                   type="tel" dir="ltr" value={form.parentPhone2}
@@ -421,13 +422,9 @@ export default function EditStudentPage() {
             </div>
           </SectionCard>
 
-          {/* Action buttons */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px',
-            justifyContent: 'flex-end', paddingTop: '4px',
-          }}>
+          {/* Action buttons — responsive via CSS class */}
+          <div className="mob-form-actions">
             <button onClick={() => navigate('/students')} style={{
-              marginRight: 'auto',
               padding: '10px 20px', borderRadius: '9px',
               background: 'transparent', border: 'none',
               fontFamily: 'Cairo, sans-serif', fontWeight: 700,
@@ -442,7 +439,7 @@ export default function EditStudentPage() {
               color: 'white', fontFamily: 'Cairo, sans-serif',
               fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer',
               boxShadow: saving ? 'none' : '0 4px 12px rgba(139,26,26,0.3)',
-              transition: 'all 0.2s',
+              transition: 'all 0.2s', minHeight: '44px', justifyContent: 'center',
             }}>
               <Save size={15} />
               {saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}

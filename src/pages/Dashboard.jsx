@@ -25,8 +25,8 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* ── Row 1: Three stat cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+      {/* ── Row 1: Three stat cards — responsive grid ── */}
+      <div className="grid-stats">
 
         {/* حضور اليوم */}
         <div
@@ -37,11 +37,11 @@ export default function Dashboard() {
             <span style={{
               fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
               background: '#DCFCE7', color: '#16A34A',
-            }}>اليوم</span>
+            }}>‹ التفاصيل</span>
             <span style={{
               fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
               background: '#DCFCE7', color: '#16A34A',
-            }}>‹ التفاصيل</span>
+            }}>اليوم</span>
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '4px' }}>حضور اليوم</p>
@@ -53,7 +53,7 @@ export default function Dashboard() {
             </div>
           </div>
           {/* Mini avatars */}
-          <div style={{ display: 'flex', gap: '-4px', marginTop: '12px', justifyContent: 'flex-start' }}>
+          <div style={{ display: 'flex', marginTop: '12px' }}>
             {students.slice(0, 4).map((s, i) => (
               <div key={s.id} style={{
                 width: '26px', height: '26px', borderRadius: '50%',
@@ -111,91 +111,77 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Row 2: Follow-up waiting + Alerts ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px' }}>
+      {/* ── Row 2: Follow-up waiting + Alerts — responsive ── */}
+      <div className="grid-two-col">
 
-        {/* بانتظار الافتقاد – table */}
+        {/* بانتظار الافتقاد */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <button
+              onClick={() => navigate('/followup')}
+              style={{ fontSize: '12px', fontWeight: 700, color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer' }}
+            >مشاهدة الكل</button>
             <div style={{ textAlign: 'right' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>بانتظار الافتقاد</h2>
               <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>
                 الطلاب الغائبون بانتظار تواصل الخادم معهم.
               </p>
             </div>
-            <button
-              onClick={() => navigate('/followup')}
-              style={{
-                fontSize: '12px', fontWeight: 700, color: '#8B1A1A',
-                background: 'none', border: 'none', cursor: 'pointer',
-              }}
-            >مشاهدة الكل</button>
           </div>
 
-          {/* Table header */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '2fr 1.2fr 1.2fr 1.5fr',
-            gap: '8px', padding: '8px 12px',
-            background: '#FAFAFA', borderRadius: '8px', marginBottom: '6px',
-          }}>
-            {['اسم الطالب','مدة الغياب','آخر تواصل','إجراء'].map(h => (
-              <p key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: 'right' }}>{h}</p>
-            ))}
-          </div>
-
-          {/* Rows */}
+          {/* Responsive table — stacks on mobile */}
           {absentToday.map((student, i) => {
             const durations = ['٣ أسابيع متتالية', 'أسبوع واحد', 'أسبوعين'];
-            const contacts = ['لم يتم التواصل', 'الأسبوع الماضي', 'منذ ١٤ يوم'];
+            const contacts  = ['لم يتم التواصل', 'الأسبوع الماضي', 'منذ ١٤ يوم'];
             return (
               <div key={student.id} style={{
-                display: 'grid', gridTemplateColumns: '2fr 1.2fr 1.2fr 1.5fr',
-                gap: '8px', padding: '10px 12px', alignItems: 'center',
-                borderBottom: '1px solid #F9FAFB',
+                padding: '10px 0', borderBottom: '1px solid #F9FAFB',
+                direction: 'rtl',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start' }}>
-                  <div style={{
-                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                    background: student.avatarColor, color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '10px', fontWeight: 700,
-                  }}>{student.avatar}</div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
-                    <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
+                {/* Student info row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <a href={`tel:${student.parentPhone}`} style={{
+                      width: '30px', height: '30px', borderRadius: '7px',
+                      border: '1.5px solid #E5E7EB', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                      color: '#6B7280', textDecoration: 'none', background: 'white',
+                    }}>
+                      <Phone size={13} />
+                    </a>
+                    <button
+                      onClick={() => navigate(`/students/${student.id}`)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        padding: '5px 10px', borderRadius: '7px',
+                        background: '#8B1A1A', color: 'white',
+                        border: 'none', cursor: 'pointer',
+                        fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
+                      }}
+                    >
+                      <Save size={11} />إضافة ملاحظة
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
+                      <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
+                    </div>
+                    <div style={{
+                      width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                      background: student.avatarColor, color: 'white',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '10px', fontWeight: 700,
+                    }}>{student.avatar}</div>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', color: '#6B7280' }}>{contacts[i] || '—'}</span>
                   <span style={{
                     fontSize: '11px', padding: '3px 8px', borderRadius: '20px',
                     background: i === 0 ? '#FEE2E2' : '#FEF9C3',
                     color: i === 0 ? '#DC2626' : '#D97706', fontWeight: 600,
                   }}>{durations[i] || 'أسبوع'}</span>
-                </div>
-                <p style={{ fontSize: '12px', color: '#6B7280', textAlign: 'right' }}>
-                  {contacts[i] || '—'}
-                </p>
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start' }}>
-                  <button
-                    onClick={() => navigate(`/students/${student.id}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      padding: '5px 10px', borderRadius: '7px',
-                      background: '#8B1A1A', color: 'white',
-                      border: 'none', cursor: 'pointer',
-                      fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
-                    }}>
-                    <Save size={11} />إضافة ملاحظة
-                  </button>
-                  <a href={`tel:${student.parentPhone}`} style={{
-                    width: '30px', height: '30px', borderRadius: '7px',
-                    border: '1.5px solid #E5E7EB', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    color: '#6B7280', textDecoration: 'none',
-                    background: 'white',
-                  }}>
-                    <Phone size={13} />
-                  </a>
                 </div>
               </div>
             );
@@ -209,15 +195,15 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* تنبيهات هامة – dark red card */}
+        {/* تنبيهات هامة */}
         <div style={{
           background: 'linear-gradient(160deg, #8B1A1A 0%, #6B1414 100%)',
           borderRadius: '14px', padding: '20px',
           boxShadow: '0 4px 16px rgba(139,26,26,0.25)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '18px' }}>⚠️</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
+            <span style={{ fontSize: '18px' }}>⚠️</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {alerts.map(alert => (
@@ -226,9 +212,9 @@ export default function Dashboard() {
                 padding: '12px 14px', textAlign: 'right',
                 border: '1px solid rgba(255,255,255,0.1)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '16px' }}>{alert.icon}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                   <p style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{alert.title}</p>
+                  <span style={{ fontSize: '16px' }}>{alert.icon}</span>
                 </div>
                 <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
                   {alert.text}
@@ -242,5 +228,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-
