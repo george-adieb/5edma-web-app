@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Save, CheckCircle, Loader2 } from 'lucide-react';
+import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { fetchStudents, fetchAttendanceForDate, saveAttendance } from '../lib/database';
+import {
+  getActiveFriday,
+  getPreviousFriday,
+  getNextFriday,
+  isCurrentCycle,
+  formatFridayLabel,
+} from '../lib/attendanceCycle';
 import StudentFilterBar, { useStudentFilters } from '../components/StudentFilterBar';
 import { useIsMobile } from '../hooks/useWindowWidth';
 
@@ -12,12 +19,17 @@ const STATUS = [
 
 const ROW_BG = { حاضر: '#F0FDF4', غائب: '#FFF1F2', معتذر: '#FFFBEB' };
 
-const TODAY     = new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const TODAY_ISO = new Date().toISOString().split('T')[0];
-
 export default function AttendancePage() {
-  const isMobile = useIsMobile();
+  const isMobile  = useIsMobile();
+
+  // ── Friday cycle state ─────────────────────────────────────
+  // Initialise to the current active Friday (most-recent Friday ≤ today).
+  const [selectedFriday, setSelectedFriday] = useState(() => getActiveFriday());
+  const atCurrentCycle = isCurrentCycle(selectedFriday);
+
+  // ── Data state ─────────────────────────────────────────────
   const [students,   setStudents]   = useState([]);
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [attendance, setAttendance] = useState({});
@@ -26,34 +38,73 @@ export default function AttendancePage() {
   const [page,       setPage]       = useState(1);
   const PER = 10;
 
+  // ── Load students once ─────────────────────────────────────
   useEffect(() => {
-    Promise.all([fetchStudents(), fetchAttendanceForDate(TODAY_ISO)])
-      .then(([studs, records]) => { setStudents(studs); setAttendance(records); })
-      .catch(err => console.error('Attendance load error:', err))
-      .finally(() => setLoading(false));
+    fetchStudents()
+      .then(studs => { setStudents(studs); setStudentsLoaded(true); })
+      .catch(err => console.error('Students load error:', err));
   }, []);
 
+  // ── Load attendance whenever selected Friday changes ───────
+  useEffect(() => {
+    if (!studentsLoaded) return;
+    setLoading(true);
+    setSaved(false);
+    fetchAttendanceForDate(selectedFriday)
+      .then(records => setAttendance(records))
+      .catch(err => console.error('Attendance load error:', err))
+      .finally(() => setLoading(false));
+  }, [selectedFriday, studentsLoaded]);
+
+  // ── Navigation handlers ────────────────────────────────────
+  function goToPreviousFriday() {
+    setAttendance({});
+    setPage(1);
+    setSelectedFriday(prev => getPreviousFriday(prev));
+  }
+
+  function goToNextFriday() {
+    if (atCurrentCycle) return; // guard: never allow future cycle
+    setAttendance({});
+    setPage(1);
+    setSelectedFriday(prev => {
+      const next = getNextFriday(prev);
+      // Extra guard: clamp to active friday if somehow overshooting
+      return next > getActiveFriday() ? getActiveFriday() : next;
+    });
+  }
+
+  function jumpToCurrentFriday() {
+    setAttendance({});
+    setPage(1);
+    setSelectedFriday(getActiveFriday());
+  }
+
+  // ── Filters & pagination ───────────────────────────────────
   const { search, setSearch, stage, setStage, year, setYear, stageConfig, baseFiltered, clearFilters } = useStudentFilters(students);
 
   const filtered   = baseFiltered.filter(s => gender === 'all' || s.gender === gender);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
   const visible    = filtered.slice((page - 1) * PER, page * PER);
 
+  // ── Stats ──────────────────────────────────────────────────
   const present = Object.values(attendance).filter(v => v === 'حاضر').length;
   const absent  = Object.values(attendance).filter(v => v === 'غائب').length;
   const excused = Object.values(attendance).filter(v => v === 'معتذر').length;
   const rate    = students.length ? Math.round((present / students.length) * 100) : 0;
   const marked  = Object.values(attendance).filter(Boolean).length;
 
+  // ── Attendance marking ─────────────────────────────────────
   function mark(id, status) {
     setAttendance(p => ({ ...p, [id]: p[id] === status ? null : status }));
     setSaved(false);
   }
 
+  // ── Save ───────────────────────────────────────────────────
   async function save() {
     setSaving(true);
     try {
-      await saveAttendance(attendance, TODAY_ISO);
+      await saveAttendance(attendance, selectedFriday);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -74,8 +125,93 @@ export default function AttendancePage() {
     }}>{label}</button>
   );
 
+  // ── Shared nav-button style ────────────────────────────────
+  const navBtn = (disabled) => ({
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '34px', height: '34px', borderRadius: '8px', border: '1.5px solid #E5E7EB',
+    background: disabled ? '#F9FAFB' : 'white', cursor: disabled ? 'not-allowed' : 'pointer',
+    color: disabled ? '#D1D5DB' : '#374151', transition: 'all 0.15s', flexShrink: 0,
+  });
+
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', paddingBottom: '80px' }}>
+
+      {/* ── Header ───────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ textAlign: 'right' }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>تسجيل الحضور</h1>
+          <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
+            كل تسجيل مرتبط بجمعة خدمة محددة
+          </p>
+        </div>
+
+        {/* Jump-to-current badge — only shown when viewing a past cycle */}
+        {!atCurrentCycle && (
+          <button onClick={jumpToCurrentFriday} style={{
+            padding: '7px 14px', borderRadius: '8px', cursor: 'pointer',
+            fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12px',
+            border: '1.5px solid #8B1A1A', color: '#8B1A1A', background: '#FEF2F2',
+            transition: 'all 0.15s', whiteSpace: 'nowrap', minHeight: '36px',
+          }}>
+            العودة للجمعة الحالية
+          </button>
+        )}
+      </div>
+
+      {/* ── Friday Cycle Navigator ───────────────────────────── */}
+      <div style={{
+        background: 'white', borderRadius: '12px', padding: '12px 16px',
+        marginBottom: '14px', border: '1px solid #F3F4F6',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '12px', direction: 'rtl',
+      }}>
+        {/* Prev button — always enabled (no limit on history) */}
+        <button
+          onClick={goToPreviousFriday}
+          style={navBtn(false)}
+          title="الجمعة السابقة"
+        >
+          <ChevronRight size={16} />
+        </button>
+
+        {/* Friday label */}
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <p style={{ fontSize: '14px', fontWeight: 800, color: '#111827', margin: 0 }}>
+            {formatFridayLabel(selectedFriday)}
+          </p>
+          {atCurrentCycle ? (
+            <span style={{
+              display: 'inline-block', marginTop: '3px',
+              fontSize: '10px', fontWeight: 700,
+              background: '#DCFCE7', color: '#16A34A',
+              padding: '1px 8px', borderRadius: '20px',
+            }}>
+              دورة الخدمة الحالية
+            </span>
+          ) : (
+            <span style={{
+              display: 'inline-block', marginTop: '3px',
+              fontSize: '10px', fontWeight: 700,
+              background: '#FEF3C7', color: '#D97706',
+              padding: '1px 8px', borderRadius: '20px',
+            }}>
+              تسجيل تاريخي
+            </span>
+          )}
+        </div>
+
+        {/* Next button — disabled when already at current cycle */}
+        <button
+          onClick={goToNextFriday}
+          disabled={atCurrentCycle}
+          style={navBtn(atCurrentCycle)}
+          title={atCurrentCycle ? 'لا يمكن فتح جمعة مستقبلية' : 'الجمعة التالية'}
+        >
+          <ChevronLeft size={16} />
+        </button>
+      </div>
+
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px', gap: '10px' }}>
           <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: '#8B1A1A' }} />
@@ -85,13 +221,7 @@ export default function AttendancePage() {
 
       {!loading && (
         <>
-          {/* Header */}
-          <div style={{ textAlign: 'right', marginBottom: '20px' }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>تسجيل حضور اليوم</h1>
-            <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>{TODAY}</p>
-          </div>
-
-          {/* Summary cards — 2-col, works on mobile */}
+          {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div style={{ background: 'white', borderRadius: '12px', padding: '14px 16px', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -153,7 +283,7 @@ export default function AttendancePage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6',
               }}>
-                {['اسم الطالب', 'آخر حضور', 'حالة الحضور اليوم'].map((h, i) => (
+                {['اسم الطالب', 'آخر حضور', 'حالة الحضور'].map((h, i) => (
                   <p key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
@@ -171,7 +301,6 @@ export default function AttendancePage() {
               const borderAccent = status === 'حاضر' ? '#16A34A' : status === 'غائب' ? '#DC2626' : status === 'معتذر' ? '#D97706' : 'transparent';
 
               if (isMobile) {
-                // Mobile card: name + buttons stacked
                 return (
                   <div key={s.id} style={{
                     padding: '12px 14px', borderBottom: '1px solid #F3F4F6',
@@ -180,7 +309,6 @@ export default function AttendancePage() {
                     transition: 'background 0.15s',
                     direction: 'rtl',
                   }}>
-                    {/* Student info */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                       <div style={{ textAlign: 'right', flex: 1 }}>
                         <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
@@ -193,7 +321,6 @@ export default function AttendancePage() {
                         fontSize: '12px', fontWeight: 700,
                       }}>{s.avatar}</div>
                     </div>
-                    {/* Attendance buttons */}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {STATUS.map(opt => (
                         <button
@@ -215,7 +342,6 @@ export default function AttendancePage() {
                 );
               }
 
-              // Desktop row
               return (
                 <div key={s.id} style={{
                   display: 'grid', gridTemplateColumns: '2fr 1.5fr 2.5fr',
@@ -260,7 +386,7 @@ export default function AttendancePage() {
             })}
           </div>
 
-          {/* Sticky bottom bar — right: 0 on mobile, right: sidebar-width on desktop */}
+          {/* Sticky bottom bar */}
           <div style={{
             position: 'fixed', bottom: 0, left: 0,
             right: isMobile ? 0 : '240px',
