@@ -68,6 +68,11 @@ body {
   100% { transform: scale(2);   opacity: 0; }
 }
 
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .animate-fade-in  { animation: fadeIn  0.3s ease forwards; }
 .animate-slide-in { animation: slideIn 0.3s ease forwards; }
 

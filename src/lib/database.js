@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { GRADE_LABEL_MAP } from '../data/constants';
+import { getRecentFridays } from './attendanceCycle';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,129 @@ export async function fetchStudents() {
     .order('name');
   if (error) throw error;
   return data;
+}
+
+/**
+ * Fetch students who need follow-up (status = 'يحتاج افتقاد').
+ * Used by the Follow-up page list and form dropdown.
+ */
+export async function fetchStudentsNeedingFollowUp() {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, name, grade, avatar, avatar_color, parent_phone, status')
+    .eq('status', 'يحتاج افتقاد')
+    .order('name');
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Fetch follow-up candidates driven entirely by real attendance data.
+ *
+ * Algorithm:
+ *   1. Query attendance_records for the given Friday dates.
+ *   2. For every student who has at least one "غائب" record, compute:
+ *        - totalAbsences   — total غائب records in the window
+ *        - consecutive     — longest streak of غائب Fridays ending at the
+ *                            most-recent Friday they appear in (streak breaks
+ *                            on the first non-غائب record when scanning newest→oldest)
+ *   3. Exclude students with zero absences.
+ *   4. Sort: consecutive desc → totalAbsences desc (most urgent first).
+ *   5. Fetch full student details and return merged objects.
+ *
+ * @param {string[]} recentFridays  Ordered list of Friday ISO dates (most-recent first).
+ *                                  Generate with getRecentFridays() from attendanceCycle.js.
+ *
+ * Each returned object has the student's DB fields plus:
+ *   absenceTotal       {number}
+ *   absenceConsecutive {number}
+ *
+ * Extensibility note: consecutive is computed client-side from individual
+ * records, so richer streak rules (e.g. "skip معتذر without breaking streak")
+ * can be added to the loop below without touching the query.
+ */
+export async function fetchFollowUpCandidates(recentFridays) {
+  if (!recentFridays || recentFridays.length === 0) return [];
+
+  // Fetch all attendance records for the given Fridays (all statuses so we
+  // can detect streak breaks caused by a حاضر or معتذر record).
+  const { data: records, error } = await supabase
+    .from('attendance_records')
+    .select('student_id, attendance_date, status')
+    .in('attendance_date', recentFridays);
+  if (error) throw error;
+  if (!records || records.length === 0) return [];
+
+  // Group records by student_id, sorted newest → oldest
+  const byStudent = {};
+  for (const rec of records) {
+    if (!byStudent[rec.student_id]) byStudent[rec.student_id] = [];
+    byStudent[rec.student_id].push(rec);
+  }
+
+  // Sort each student's records newest first (ISO string comparison works for dates)
+  for (const id of Object.keys(byStudent)) {
+    byStudent[id].sort((a, b) => b.attendance_date.localeCompare(a.attendance_date));
+  }
+
+  // Calculate absence metrics per student
+  const metrics = [];
+  for (const [studentId, recs] of Object.entries(byStudent)) {
+    const totalAbsences = recs.filter(r => r.status === 'غائب').length;
+    if (totalAbsences === 0) continue; // no absences → not a follow-up candidate
+
+    // Consecutive streak: scan newest → oldest, count leading غائب records.
+    // A حاضر or معتذر record breaks the streak.
+    // (To treat معتذر as "not absent" and allow the streak to continue, simply
+    //  change the condition below from `r.status === 'غائب'` to
+    //  `r.status !== 'حاضر'`.)
+    let consecutive = 0;
+    for (const r of recs) {
+      if (r.status === 'غائب') consecutive++;
+      else break;
+    }
+
+    metrics.push({ studentId, totalAbsences, consecutive });
+  }
+
+  if (metrics.length === 0) return [];
+
+  // Sort: consecutive desc, then totalAbsences desc
+  metrics.sort((a, b) =>
+    b.consecutive  - a.consecutive  ||
+    b.totalAbsences - a.totalAbsences
+  );
+
+  // Fetch student details in a single query
+  const ids = metrics.map(m => m.studentId);
+  const { data: students, error: e2 } = await supabase
+    .from('students')
+    .select('id, name, grade, avatar, avatar_color, parent_phone, status')
+    .in('id', ids);
+  if (e2) throw e2;
+
+  const studentMap = Object.fromEntries((students || []).map(s => [String(s.id), s]));
+
+  // Merge and return in sorted order
+  return metrics
+    .map(m => {
+      const s = studentMap[String(m.studentId)];
+      if (!s) return null;
+      return { ...s, absenceTotal: m.totalAbsences, absenceConsecutive: m.consecutive };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Update only the status field of a student.
+ * Used when a follow-up closes a case (e.g. student returned to regularity).
+ */
+export async function updateStudentStatus(id, status) {
+  const { error } = await supabase
+    .from('students')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 /** Fetch a single student by id */
@@ -285,50 +409,123 @@ export async function saveFollowUpLog({ studentId, studentName, type, notes, con
   if (error) throw error;
 }
 
-// ─── DASHBOARD STATS ──────────────────────────────────────────────────────────
+// ─── FOLLOW-UP COUNT (shared truth) ───────────────────────────────────────────
 
-export async function fetchDashboardStats() {
-  const today = todayISO();
-
-  const [{ count: totalStudents }, attendanceRows, { count: needFollowUp }] = await Promise.all([
-    supabase.from('students').select('*', { count: 'exact', head: true }),
-    supabase.from('attendance_records').select('status').eq('attendance_date', today),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'يحتاج افتقاد'),
-  ]);
-
-  const records = attendanceRows.data || [];
-  const presentToday = records.filter(r => r.status === 'حاضر').length;
-  const absentToday  = records.filter(r => r.status === 'غائب').length;
-  const excusedToday = records.filter(r => r.status === 'معتذر').length;
-
-  return {
-    totalStudents:  totalStudents || 0,
-    presentToday,
-    absentToday,
-    excusedToday,
-    needFollowUp:   needFollowUp || 0,
-    attendanceRate: totalStudents ? Math.round((presentToday / totalStudents) * 100) : 0,
-  };
-}
-
-/** Fetch students who are absent today */
-export async function fetchAbsentToday() {
-  const today = todayISO();
+/**
+ * Count unique students who have at least one "غائب" record within the
+ * given Friday dates.  This is the canonical source for the follow-up
+ * count — both the dashboard card and the follow-up page use this logic
+ * so they always agree.
+ *
+ * @param {string[]} recentFridays  ISO Friday dates (from getRecentFridays()).
+ * @returns {Promise<number>}
+ */
+export async function fetchFollowUpCount(recentFridays) {
+  if (!recentFridays?.length) return 0;
   const { data, error } = await supabase
     .from('attendance_records')
     .select('student_id')
-    .eq('attendance_date', today)
+    .in('attendance_date', recentFridays)
     .eq('status', 'غائب');
   if (error) throw error;
-  if (!data.length) return [];
+  return new Set((data || []).map(r => r.student_id)).size;
+}
 
-  const ids = data.map(r => r.student_id);
+// ─── DASHBOARD STATS ──────────────────────────────────────────────────────────
+
+/**
+ * Fetch all stats needed for the dashboard summary cards.
+ *
+ * @param {string} fridayDate  ISO date of the active Friday cycle (YYYY-MM-DD).
+ *                             Use getActiveFriday() from attendanceCycle.js.
+ *
+ * Returns:
+ *   totalStudents   — total enrolled students
+ *   totalServants   — total registered servants  (future card: إجمالي الخدام)
+ *   presentCount    — students marked حاضر for this Friday
+ *   absentCount     — students marked غائب for this Friday
+ *   excusedCount    — students marked معتذر for this Friday
+ *   attendanceRate  — percentage (present / total * 100)
+ *   needFollowUp    — count of active follow-up tasks  (future: trend data)
+ *   avatarStudents  — small slice of students for mini-avatar row
+ *
+ * Uses Promise.allSettled so a single failing query never crashes the page.
+ * Each field falls back to a safe zero/empty value on error.
+ */
+export async function fetchDashboardStats(fridayDate) {
+  // Shared Friday window — same as the follow-up page uses
+  const recentFridays = getRecentFridays(8);
+
+  const results = await Promise.allSettled([
+    // 0 — total students
+    supabase.from('students').select('*', { count: 'exact', head: true }),
+    // 1 — attendance records for the active Friday cycle
+    supabase.from('attendance_records').select('status').eq('attendance_date', fridayDate),
+    // 2 — follow-up candidate count (attendance-derived, same logic as follow-up page)
+    fetchFollowUpCount(recentFridays),
+    // 3 — small set of students for the avatar row decoration
+    supabase.from('students').select('id, avatar, avatar_color').limit(6),
+    // 4 — total servants (future: إجمالي الخدام card)
+    supabase.from('servants').select('*', { count: 'exact', head: true }),
+  ]);
+
+  const safe = (i, fallback) =>
+    results[i].status === 'fulfilled' ? results[i].value : fallback;
+
+  const totalStudents  = safe(0, { count: 0 }).count || 0;
+  const attendanceRows = (safe(1, { data: [] }).data) || [];
+  // fetchFollowUpCount returns a plain number, not a Supabase response object
+  const needFollowUp   = results[2].status === 'fulfilled' ? (results[2].value ?? 0) : 0;
+  const avatarStudents = (safe(3, { data: [] }).data) || [];
+  const totalServants  = safe(4, { count: 0 }).count || 0;
+
+  const presentCount  = attendanceRows.filter(r => r.status === 'حاضر').length;
+  const absentCount   = attendanceRows.filter(r => r.status === 'غائب').length;
+  const excusedCount  = attendanceRows.filter(r => r.status === 'معتذر').length;
+  const attendanceRate = totalStudents
+    ? Math.round((presentCount / totalStudents) * 100)
+    : 0;
+
+  return {
+    totalStudents,
+    totalServants,
+    presentCount,
+    absentCount,
+    excusedCount,
+    attendanceRate,
+    needFollowUp,
+    avatarStudents,
+  };
+}
+
+/**
+ * Fetch the list of absent students for a specific attendance date.
+ * Used by the dashboard "بانتظار الافتقاد" section.
+ *
+ * @param {string} date  ISO date — defaults to today for backward compat.
+ */
+export async function fetchAbsentForDate(date = todayISO()) {
+  const { data: absences, error: e1 } = await supabase
+    .from('attendance_records')
+    .select('student_id')
+    .eq('attendance_date', date)
+    .eq('status', 'غائب');
+  if (e1) throw e1;
+  if (!absences || absences.length === 0) return [];
+
+  const ids = absences.map(r => r.student_id);
   const { data: studs, error: e2 } = await supabase
     .from('students')
     .select('id, name, grade, avatar, avatar_color, parent_phone')
-    .in('id', ids);
+    .in('id', ids)
+    .limit(10); // cap dashboard list
   if (e2) throw e2;
-  return studs;
+  return studs || [];
+}
+
+/** @deprecated Use fetchAbsentForDate(date) instead */
+export async function fetchAbsentToday() {
+  return fetchAbsentForDate(todayISO());
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

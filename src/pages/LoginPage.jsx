@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Loader2, X, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showSupportModal, setShowSupportModal] = useState(false);
   const navigate = useNavigate();
   const { user, profile, loading: authLoading, logout } = useAuth();
 
@@ -203,10 +204,13 @@ export default function LoginPage() {
 
         {/* Forgot Password Link */}
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
-          <button style={{
-            background: 'none', border: 'none', color: '#6B7280', fontSize: '13px',
-            fontFamily: 'Cairo, sans-serif', cursor: 'pointer', textDecoration: 'underline',
-          }}>
+          <button
+            onClick={() => setShowSupportModal(true)}
+            style={{
+              background: 'none', border: 'none', color: '#6B7280', fontSize: '13px',
+              fontFamily: 'Cairo, sans-serif', cursor: 'pointer', textDecoration: 'underline',
+            }}
+          >
             نسيت كلمة المرور؟
           </button>
         </div>
@@ -214,13 +218,148 @@ export default function LoginPage() {
 
       {/* ── Footer ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontSize: '12px', color: '#9CA3AF', marginBottom: '16px' }}>
-        <a href="#" style={{ color: '#9CA3AF', textDecoration: 'none' }}>سياسة الخصوصية</a>
-        <a href="#" style={{ color: '#9CA3AF', textDecoration: 'none' }}>الدعم الفني</a>
-        <a href="#" style={{ color: '#9CA3AF', textDecoration: 'none' }}>عن النظام</a>
+        <button
+          onClick={() => setShowSupportModal(true)}
+          style={{
+            background: 'none', border: 'none', color: '#9CA3AF', fontSize: '12px',
+            fontFamily: 'Cairo, sans-serif', cursor: 'pointer', padding: 0,
+          }}
+        >
+          تواصل مع الدعم الفني
+        </button>
       </div>
       <p style={{ fontSize: '11px', color: '#D1D5DB' }}>
-        © 2024 سجل الخدمة - كنيستنا القبطية
+        © 2026 سجل خدمة مدارس الأحد - كنيسة الشهيد العظيم مارجرجس سيدي بشر
       </p>
+
+      {/* ── Support Modal ── */}
+      {showSupportModal && (
+        <div
+          onClick={() => setShowSupportModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(0,0,0,0.38)',
+            backdropFilter: 'blur(2px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: '20px',
+              padding: '32px 28px 28px',
+              width: '100%',
+              maxWidth: '360px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
+              border: '1px solid #F3F4F6',
+              direction: 'rtl',
+              fontFamily: 'Cairo, sans-serif',
+              position: 'relative',
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowSupportModal(false)}
+              style={{
+                position: 'absolute', top: '16px', left: '16px',
+                background: '#F3F4F6', border: 'none', borderRadius: '50%',
+                width: '32px', height: '32px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: '#6B7280', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#E5E7EB'}
+              onMouseLeave={e => e.currentTarget.style.background = '#F3F4F6'}
+            >
+              <X size={15} />
+            </button>
+
+            {/* Icon */}
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '14px',
+              background: 'linear-gradient(135deg, #8B1A1A 0%, #6B1414 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: '16px',
+              boxShadow: '0 4px 12px rgba(139,26,26,0.3)',
+            }}>
+              <MessageCircle size={26} color="white" fill="white" />
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              fontSize: '18px', fontWeight: 800, color: '#111827',
+              marginBottom: '10px',
+            }}>
+              الدعم الفني
+            </h3>
+
+            {/* Message */}
+            <p style={{
+              fontSize: '13.5px', color: '#4B5563', lineHeight: 1.7,
+              marginBottom: '8px',
+            }}>
+              للمساعدة أو الدعم الفني، برجاء التواصل عبر واتساب على الرقم التالي:
+            </p>
+
+            {/* Phone number */}
+            <div style={{
+              background: '#F5EAEA',
+              border: '1px solid #FECACA',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              marginBottom: '24px',
+              textAlign: 'center',
+            }}>
+              <span style={{
+                fontSize: '16px', fontWeight: 800, color: '#8B1A1A',
+                letterSpacing: '0.5px', direction: 'ltr', display: 'block',
+              }}>
+                +201004409418
+              </span>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <a
+                href="https://wa.me/201004409418"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  background: 'linear-gradient(135deg, #8B1A1A 0%, #6B1414 100%)',
+                  color: 'white', borderRadius: '10px',
+                  padding: '13px 20px',
+                  fontSize: '14px', fontWeight: 800, fontFamily: 'Cairo, sans-serif',
+                  textDecoration: 'none',
+                  boxShadow: '0 4px 12px rgba(139,26,26,0.25)',
+                  transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <MessageCircle size={16} />
+                فتح واتساب
+              </a>
+              <button
+                onClick={() => setShowSupportModal(false)}
+                style={{
+                  background: 'none', border: '1.5px solid #E5E7EB', borderRadius: '10px',
+                  padding: '12px 20px',
+                  fontSize: '14px', fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                  color: '#6B7280', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#F9FAFB'; e.currentTarget.style.borderColor = '#D1D5DB'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = '#E5E7EB'; }}
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

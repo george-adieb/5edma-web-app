@@ -91,6 +91,24 @@ export function formatFridayShort(fridayISO) {
   });
 }
 
+/**
+ * Return an ordered list of ISO Friday dates going back `count` weeks
+ * from the current active Friday (inclusive).
+ *
+ * Result: most-recent first, e.g. ['2025-04-25', '2025-04-18', ...]
+ *
+ * Used by the follow-up priority engine to scope absence queries.
+ */
+export function getRecentFridays(count = 8, today = new Date()) {
+  const fridays = [];
+  let current = getActiveFriday(today);
+  for (let i = 0; i < count; i++) {
+    fridays.push(current);
+    current = getPreviousFriday(current);
+  }
+  return fridays; // most-recent first
+}
+
 // ─── Internal helper ──────────────────────────────────────────
 
 function toISO(d) {
