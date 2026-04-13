@@ -75,7 +75,7 @@ export default function ServantsPage() {
         <>
           {/* Page header — responsive flex */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
-            <button style={{
+            <button onClick={() => navigate('/servants/new')} style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '10px 16px', borderRadius: '10px',
               background: '#8B1A1A', color: 'white',

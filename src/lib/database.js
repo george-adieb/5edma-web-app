@@ -124,6 +124,57 @@ export function gradeLabel(gradeId) {
   return GRADE_LABEL_MAP[gradeId] || gradeId;
 }
 
+// ─── SERVANTS ─────────────────────────────────────────────────────────────────
+
+/** Fetch all servants ordered by name */
+export async function fetchServants() {
+  const { data, error } = await supabase
+    .from('servants')
+    .select('*')
+    .order('full_name');
+  if (error) throw error;
+  return data;
+}
+
+/** Insert a new servant */
+export async function insertServant(servantData) {
+  const role = servantData.role || null;
+
+  // Stage mapping: each role gets exactly one of {stage_group, stage}, the other is null
+  const stageGroup = role === 'أمين خدمة'  ? (servantData.stageGroup || null) : null;
+  const stage      = role === 'خادم مرحلة' ? (servantData.stage      || null) : null;
+
+  const row = {
+    full_name:          servantData.fullName          || null,
+    nickname:           servantData.nickname          || null,
+    gender:             servantData.gender            || null,
+    birth_date:         servantData.birthDate         || null,
+    email:              servantData.email             || null,
+    phone:              servantData.phone             || null,
+    secondary_phone:    servantData.secondaryPhone    || null,
+    role,
+    stage_group:        stageGroup,
+    stage,
+    service_start_date: servantData.serviceStartDate  || null,
+    status:             servantData.status            || 'نشط',
+    supervisor_name:    servantData.supervisorName    || null,
+    address:            servantData.address           || null,
+    nearest_church:     servantData.nearestChurch     || null,
+    hobbies:            servantData.hobbies           || null,
+    notes:              servantData.notes             || null,
+    medical_notes:      servantData.medicalNotes      || null,
+  };
+
+  console.log('[insertServant] payload →', row);
+  const { data, error } = await supabase.from('servants').insert(row).select().single();
+  console.log('[insertServant] response →', data);
+  if (error) {
+    console.error('[insertServant] error →', error);
+    throw error;
+  }
+  return data;
+}
+
 // ─── ATTENDANCE ───────────────────────────────────────────────────────────────
 
 /** Fetch all attendance records for a given date (defaults: today) */

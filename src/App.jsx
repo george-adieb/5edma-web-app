@@ -9,6 +9,7 @@ import FollowUpPage from './pages/FollowUpPage';
 import SettingsPage from './pages/SettingsPage';
 import AddStudentPage from './pages/AddStudentPage';
 import EditStudentPage from './pages/EditStudentPage';
+import AddServantPage from './pages/AddServantPage';
 import LoginPage from './pages/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
       { path: 'students/edit/:id', element: <EditStudentPage /> },
       { path: 'students/:id', element: <StudentProfilePage /> },
       { path: 'servants', element: <ServantsPage /> },
+      { path: 'servants/new', element: <AddServantPage /> },
       { path: 'followup', element: <FollowUpPage /> },
       { path: 'settings', element: <SettingsPage /> },
     ],
