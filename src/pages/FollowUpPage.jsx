@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Phone, Home, MessageSquare, Save, CheckCircle, Bell, Loader2, AlertCircle } from 'lucide-react';
 import {
   fetchFollowUpCandidates,
@@ -71,6 +72,7 @@ function Skel({ w = '100%', h = '14px', radius = '6px' }) {
 
 /* ─── Page ───────────────────────────────────────────────────── */
 export default function FollowUpPage() {
+  const { globalSearch } = useOutletContext() || { globalSearch: '' };
 
   // ── Data state ─────────────────────────────────────────────
   const [followUpStudents, setFollowUpStudents] = useState([]);
@@ -122,18 +124,17 @@ export default function FollowUpPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Build last-contact map: student_id → most recent log ──
-  // Used only for display ("آخر تواصل") — urgency is now
-  // calculated from attendance data, not from this map.
-  const lastContactMap = useMemo(() => {
-    const map = {};
-    for (const log of logs) {
-      if (log.student_id && !map[log.student_id]) {
-        map[log.student_id] = { type: log.type, time: log.time };
-      }
-    }
-    return map;
-  }, [logs]);
+  // ── No global lastContactMap needed ──
+  // The server-side filter now perfectly surfaces `f.latestLog` right on the student!
+
+  const filteredFollowUpStudents = useMemo(() => {
+    if (!globalSearch) return followUpStudents;
+    const q = globalSearch.toLowerCase();
+    return followUpStudents.filter(s => 
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.grade || '').toLowerCase().includes(q)
+    );
+  }, [followUpStudents, globalSearch]);
 
   // ── Save handler ───────────────────────────────────────────
   async function handleSave() {
@@ -143,7 +144,6 @@ export default function FollowUpPage() {
     try {
       await saveFollowUpLog({
         studentId:     selected.id,
-        studentName:   selected.name,
         type,
         notes,
         contactStatus,
@@ -172,7 +172,7 @@ export default function FollowUpPage() {
 
   /* ── Render ─────────────────────────────────────────────── */
   return (
-    <div style={{ animation: 'fadeIn 0.3s ease' }}>
+    <div style={{ animation: 'fadeIn 0.3s ease', direction: 'rtl' }}>
 
       {/* Header */}
       <div style={{ textAlign: 'right', marginBottom: '20px' }}>
@@ -183,13 +183,13 @@ export default function FollowUpPage() {
       {/* Load error banner */}
       {loadError && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end',
+          display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start',
           background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: '10px',
           padding: '10px 14px', marginBottom: '16px',
           fontSize: '12px', fontWeight: 700, color: '#D97706',
         }}>
-          <span>{loadError}</span>
           <AlertCircle size={14} />
+          <span>{loadError}</span>
         </div>
       )}
 
@@ -211,7 +211,7 @@ export default function FollowUpPage() {
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', display: 'block', marginBottom: '6px' }}>الطالب</label>
             {loading ? (
               <Skel h="42px" radius="8px" />
-            ) : followUpStudents.length === 0 ? (
+            ) : filteredFollowUpStudents.length === 0 ? (
               <div style={{
                 padding: '10px 14px', background: '#F0FDF4', borderRadius: '8px',
                 border: '1.5px solid #86EFAC', fontSize: '13px', color: '#16A34A',
@@ -228,7 +228,7 @@ export default function FollowUpPage() {
                   if (found) setSelected(found);
                 }}
               >
-                {followUpStudents.map(s => (
+                {filteredFollowUpStudents.map(s => (
                   <option key={s.id} value={s.id}>{s.name} — {s.grade || '—'}</option>
                 ))}
               </select>
@@ -336,7 +336,7 @@ export default function FollowUpPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#9CA3AF' }}>
-              {loading ? '...' : `${followUpStudents.length} طالب`}
+              {loading ? '...' : `${filteredFollowUpStudents.length} طالب`}
             </span>
             <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>قائمة المتابعة</h2>
           </div>
@@ -350,23 +350,23 @@ export default function FollowUpPage() {
                 border: '1.5px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Skel w="60px" h="22px" radius="20px" />
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#F3F4F6', flexShrink: 0 }} />
                     <div>
                       <Skel w="100px" h="14px" />
                       <div style={{ marginTop: '5px' }}><Skel w="70px" h="11px" /></div>
                     </div>
-                    <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#F3F4F6', flexShrink: 0 }} />
                   </div>
+                  <Skel w="60px" h="22px" radius="20px" />
                 </div>
               </div>
             ))}
 
             {/* Real follow-up student cards — sorted by attendance-based priority */}
-            {!loading && followUpStudents.map(f => {
+            {!loading && filteredFollowUpStudents.map(f => {
               const level   = urgencyLevel(f.absenceConsecutive);
               const urg     = URGENCY[level];
-              const lastLog = lastContactMap[f.id];
+              const lastLog = f.latestLog;
               const typeC   = lastLog ? (LOG_TYPE_COLORS[lastLog.type] || {}) : {};
               const durationText = absenceDurationLabel(f.absenceConsecutive, f.absenceTotal);
 
@@ -383,8 +383,27 @@ export default function FollowUpPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 
-                    {/* Left column: urgency badge + last-contact type icon */}
-                    <div style={{ display: 'flex', gap: '6px', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    {/* Right column (physically): avatar + name + grade + absence duration */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+                        background: f.avatar_color || '#8B1A1A', color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', fontWeight: 700,
+                      }}>
+                        {f.avatar}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{f.name}</p>
+                        <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{f.grade || '—'}</p>
+                        <p style={{ fontSize: '11px', marginTop: '2px', color: urg.color, fontWeight: 600 }}>
+                          {durationText}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Left column (physically): urgency badge + last-contact type icon */}
+                    <div style={{ display: 'flex', gap: '6px', flexDirection: 'column', alignItems: 'flex-start' }}>
                       <span style={{
                         fontSize: '11px', padding: '3px 9px', borderRadius: '20px',
                         fontWeight: 700, background: urg.bg, color: urg.color,
@@ -404,25 +423,6 @@ export default function FollowUpPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Right column: avatar + name + grade + absence duration */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{f.name}</p>
-                        <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{f.grade || '—'}</p>
-                        <p style={{ fontSize: '11px', marginTop: '2px', color: urg.color, fontWeight: 600 }}>
-                          {durationText}
-                        </p>
-                      </div>
-                      <div style={{
-                        width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
-                        background: f.avatar_color || '#8B1A1A', color: 'white',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '11px', fontWeight: 700,
-                      }}>
-                        {f.avatar}
-                      </div>
-                    </div>
                   </div>
 
                   {/* Footer: last contact + absence count pill */}
@@ -436,16 +436,29 @@ export default function FollowUpPage() {
                     }}>
                       {f.absenceTotal} {f.absenceTotal === 1 ? 'غياب' : 'غيابات'} / {LOOKBACK_WEEKS} أسابيع
                     </span>
-                    <p style={{ fontSize: '11px', color: '#9CA3AF', textAlign: 'right' }}>
-                      آخر تواصل: {lastLog ? `${lastLog.type} — ${lastLog.time}` : 'لم يتم التواصل'}
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {lastLog ? (
+                        <>
+                          <p style={{ fontSize: '11px', color: '#6B7280' }}>
+                            {lastLog.type} — {lastLog.time}
+                          </p>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: typeC.color, background: typeC.bg, padding: '2px 6px', borderRadius: '4px' }}>
+                            {lastLog.contact_status}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: '#9CA3AF', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>
+                          لم يتم التواصل
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
 
             {/* Empty state */}
-            {!loading && followUpStudents.length === 0 && (
+            {!loading && filteredFollowUpStudents.length === 0 && (
               <div style={{
                 textAlign: 'center', padding: '32px',
                 background: 'white', borderRadius: '12px', border: '1.5px solid #F3F4F6',
@@ -458,7 +471,7 @@ export default function FollowUpPage() {
             )}
 
             {/* Reminder alert — shown only when there are students to follow up */}
-            {!loading && followUpStudents.length > 0 && (
+            {!loading && filteredFollowUpStudents.length > 0 && (
               <div style={{
                 background: '#FFFBEB', borderRadius: '10px', padding: '12px 14px',
                 border: '1.5px solid #FDE68A',
@@ -468,7 +481,7 @@ export default function FollowUpPage() {
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   <p style={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>تنبيه لمكالمة قادمة</p>
                   <p style={{ fontSize: '11px', color: '#B45309', marginTop: '2px' }}>
-                    الأولوية: تواصل مع أسرة {followUpStudents[0]?.name ?? '—'}
+                    الأولوية: تواصل مع أسرة {filteredFollowUpStudents[0]?.name ?? '—'}
                   </p>
                 </div>
                 <span style={{ fontSize: '18px' }}>🕐</span>
@@ -518,7 +531,6 @@ export default function FollowUpPage() {
                   }} />
                   <div style={{ flex: 1, textAlign: 'right' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{log.time}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>
                           {log.student_name}
@@ -530,15 +542,11 @@ export default function FollowUpPage() {
                           {log.type}
                         </span>
                       </div>
+                      <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{log.time}</span>
                     </div>
                     {log.notes && (
                       <p style={{ fontSize: '12px', color: '#6B7280', lineHeight: 1.5, marginTop: '2px' }}>
                         {log.notes}
-                      </p>
-                    )}
-                    {log.servant_name && (
-                      <p style={{ fontSize: '10px', color: '#9CA3AF', marginTop: '3px' }}>
-                        {log.servant_name}
                       </p>
                     )}
                   </div>

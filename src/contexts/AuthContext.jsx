@@ -11,6 +11,12 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const currentUserRef = useRef(null);
+  const currentProfileRef = useRef(null);
+
+  useEffect(() => { currentUserRef.current = user; }, [user]);
+  useEffect(() => { currentProfileRef.current = profile; }, [profile]);
+
   // We use this ref to track if we're currently initializing the session
   // to avoid race conditions with the onAuthStateChange events firing simultaneously on mount.
   const isInitializingState = useRef(true);
@@ -23,26 +29,64 @@ export function AuthProvider({ children }) {
       setUser(u);
       
       if (u) {
-        const uProfile = await authService.fetchUserProfile(u.id, source);
-        setProfile(uProfile);
+        const fetchProfilePromise = authService.fetchUserProfile(u.id, source);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Auth profile fetch timeout limit reached')), 8000)
+        );
+        
+        const uProfile = await Promise.race([fetchProfilePromise, timeoutPromise]);
+        
+        setProfile(prevProfile => {
+          if (uProfile?.isFallback && prevProfile && !prevProfile.isFallback) {
+            console.log('[AuthContext] Discarding fallback profile; persisting existing real profile identity.');
+            return prevProfile;
+          }
+          return uProfile || null;
+        });
       } else {
         setProfile(null);
       }
+    } catch (err) {
+      console.error('[AuthContext] Session resolution encountered a hard stall/timeout:', err);
+      // Defensively keep the previous profile if it exists rather than breaking the user UI.
+      setProfile(prev => prev || null);
     } finally {
-      // Regardless of success/failure of fetching the profile,
-      // the authentication initialization cycle finishes here and allows the app to render.
+      // Regardless of success/failure, NEVER hold the user hostage.
+      // Force UI resolution instantly.
       isInitializingState.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // 0. Handle tab visibility changes to cleanly recover dead sessions in the background
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[AuthContext] Tab became visible, verifying background session bounds...');
+        const valid = await authService.handleSessionRecovery();
+        if (!valid) {
+          console.warn('[AuthContext] Background recovery explicitly blocked; logging out securely.');
+          await authService.signOut();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // 1. Initial manual fetch on mount to guarantee the app has the latest session state
-    // before any protected components attempt to render.
     const initSession = async () => {
       console.log('[AuthContext] Starting initial session check...');
-      const initSessionData = await authService.getValidSession();
-      await resolveSession(initSessionData, 'mount_initialization');
+      try {
+        const fetchPromise = authService.getValidSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Initial session fetch timeout limit reached')), 8000)
+        );
+        const initSessionData = await Promise.race([fetchPromise, timeoutPromise]);
+        await resolveSession(initSessionData, 'mount_initialization');
+      } catch (err) {
+        console.error('[AuthContext] Init session timed out or failed abruptly:', err);
+        // Force a resolution to un-stick the loading screen
+        await resolveSession(null, 'mount_failed_timeout');
+      }
     };
 
     initSession();
@@ -63,8 +107,9 @@ export function AuthProvider({ children }) {
             break;
 
           case 'SIGNED_IN':
-            if (!isInitializingState.current) {
-              // Set loading to true while we fetch their profile since it's a new login
+            if (!isInitializingState.current && !currentUserRef.current) {
+              // Explicitly bypass loading spinner if evaluating a background recovery
+              // Only block UI for a fresh login.
               setLoading(true);
             }
             await resolveSession(session, 'SIGNED_IN');
@@ -98,6 +143,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       subscription?.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [resolveSession]);
 

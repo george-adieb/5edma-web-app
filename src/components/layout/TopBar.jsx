@@ -20,9 +20,7 @@ const ROLE_LABELS = {
   STAGE_SERVANT:        'خادم',
 };
 
-export default function TopBar({ onMenuClick }) {
-  const [search, setSearch]     = useState('');
-  const [showSearch, setShowSearch] = useState(false);
+export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { user, profile, logout } = useAuth();
@@ -72,32 +70,39 @@ export default function TopBar({ onMenuClick }) {
       </button>
 
       {/* ── Page title / breadcrumb ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', flex: 1 }}>
-        <span style={{ color: '#8B1A1A', fontWeight: 700 }}>{pageLabel}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
         {location.pathname !== '/' && (
           <>
-            <span className="mob-hide" style={{ color: '#D1D5DB' }}>›</span>
             <span className="mob-hide" style={{ color: '#9CA3AF' }}>مارجرجس سيدي بشر</span>
+            <span className="mob-hide" style={{ color: '#D1D5DB' }}>/</span>
           </>
         )}
+        <span style={{ color: '#8B1A1A', fontWeight: 700 }}>{pageLabel}</span>
       </div>
 
       {/* ── Search (hidden on mobile, show as icon) ── */}
-      <div className="mob-hide" style={{ position: 'relative', width: '280px' }}>
+      <div className="mob-hide" style={{ position: 'relative', width: '280px', marginInlineEnd: 'auto', marginInlineStart: '16px' }}>
         <Search size={14} style={{
           position: 'absolute', right: '12px', top: '50%',
           transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none',
         }} />
         <input
           type="text"
-          placeholder="ابحث عن طالب أو سجل..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          placeholder={
+            location.pathname.startsWith('/students') || location.pathname.startsWith('/attendance') || location.pathname.startsWith('/followup')
+              ? "ابحث بالاسم أو الكود..."
+              : location.pathname.startsWith('/servants')
+                ? "ابحث باسم الخادم أو المرحلة..."
+                : "ابحث عن اسم أو سجل..."
+          }
+          value={globalSearch || ''}
+          onChange={e => setGlobalSearch(e.target.value)}
           style={{
             width: '100%', padding: '7px 36px 7px 12px',
             background: '#F9FAFB', border: '1.5px solid #F3F4F6',
             borderRadius: '8px', fontFamily: 'Cairo, sans-serif',
             fontSize: '13px', color: '#374151', outline: 'none',
+            direction: 'rtl',
           }}
           onFocus={e  => { e.target.style.borderColor = '#8B1A1A'; e.target.style.background = 'white'; }}
           onBlur={e   => { e.target.style.borderColor = '#F3F4F6'; e.target.style.background = '#F9FAFB'; }}

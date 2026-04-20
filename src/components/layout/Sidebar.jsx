@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X,
 } from 'lucide-react';
@@ -12,11 +12,26 @@ const navItems = [
   { to: '/settings',  icon: Settings,         label: 'الإعدادات'   },
 ];
 
-function AddStudentBtn({ onClose }) {
+function ContextualAddBtn({ onClose }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  let targetPath = '';
+  let label = '';
+
+  if (location.pathname.startsWith('/students')) {
+    targetPath = '/students/new';
+    label = 'إضافة طالب جديد';
+  } else if (location.pathname.startsWith('/servants')) {
+    targetPath = '/servants/new';
+    label = 'إضافة خادم جديد';
+  } else {
+    return null;
+  }
+
   return (
     <button
-      onClick={() => { navigate('/students/new'); onClose?.(); }}
+      onClick={() => { navigate(targetPath); onClose?.(); }}
       style={{
         width: '100%', padding: '11px 16px', borderRadius: '10px',
         background: 'linear-gradient(135deg, #8B1A1A, #B52626)',
@@ -30,7 +45,7 @@ function AddStudentBtn({ onClose }) {
       onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
     >
       <UserPlus size={15} />
-      إضافة طالب جديد
+      {label}
     </button>
   );
 }
@@ -113,7 +128,7 @@ export default function Sidebar({ onClose }) {
       </nav>
 
       <div style={{ padding: '12px 12px 20px' }}>
-        <AddStudentBtn onClose={onClose} />
+        <ContextualAddBtn onClose={onClose} />
       </div>
     </aside>
   );

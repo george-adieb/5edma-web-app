@@ -134,7 +134,7 @@ export default function AttendancePage() {
   });
 
   return (
-    <div style={{ animation: 'fadeIn 0.3s ease', paddingBottom: '80px' }}>
+    <div style={{ animation: 'fadeIn 0.3s ease', paddingBottom: '80px', direction: 'rtl' }}>
 
       {/* ── Header ───────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -225,20 +225,20 @@ export default function AttendancePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             <div style={{ background: 'white', borderRadius: '12px', padding: '14px 16px', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '24px' }}>🧑‍🎓</span>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ fontSize: '12px', color: '#9CA3AF' }}>إجمالي الطلاب</p>
                   <p style={{ fontSize: '30px', fontWeight: 900, color: '#111827', lineHeight: 1 }}>{students.length}</p>
                 </div>
+                <span style={{ fontSize: '24px' }}>🧑‍🎓</span>
               </div>
             </div>
             <div style={{ background: 'white', borderRadius: '12px', padding: '14px 16px', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '24px' }}>👥</span>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ fontSize: '12px', color: '#9CA3AF' }}>نسبة الحضور</p>
                   <p style={{ fontSize: '30px', fontWeight: 900, color: '#8B1A1A', lineHeight: 1 }}>%{rate}</p>
                 </div>
+                <span style={{ fontSize: '24px' }}>👥</span>
               </div>
             </div>
           </div>
@@ -310,16 +310,16 @@ export default function AttendancePage() {
                     direction: 'rtl',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <div style={{ textAlign: 'right', flex: 1 }}>
-                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
-                        <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{s.grade}</p>
-                      </div>
                       <div style={{
                         width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
                         background: s.avatar_color || s.avatarColor, color: 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '12px', fontWeight: 700,
                       }}>{s.avatar}</div>
+                      <div style={{ textAlign: 'right', flex: 1 }}>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
+                        <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{s.grade}</p>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {STATUS.map(opt => (
@@ -351,17 +351,17 @@ export default function AttendancePage() {
                   transition: 'background 0.15s',
                   borderRight: `3px solid ${borderAccent}`,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
-                      <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{s.grade}</p>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-start' }}>
                     <div style={{
                       width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
                       background: s.avatar_color || s.avatarColor, color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '11px', fontWeight: 700,
                     }}>{s.avatar}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
+                      <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{s.grade}</p>
+                    </div>
                   </div>
                   <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>{s.last_attendance || s.lastAttendance}</p>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
@@ -397,12 +397,18 @@ export default function AttendancePage() {
             gap: '8px', flexWrap: 'wrap',
           }}>
             {/* Pagination */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', color: '#6B7280', fontFamily: 'Cairo', fontSize: '14px', minHeight: '36px' }}>›</button>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>{page}/{totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', color: '#6B7280', fontFamily: 'Cairo', fontSize: '14px', minHeight: '36px' }}>‹</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', direction: 'rtl' }}>
+              <button title="الصفحة السابقة" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', color: page === 1 ? '#D1D5DB' : '#6B7280', display: 'flex', alignItems: 'center', minHeight: '36px', transition: 'all 0.15s' }}>
+                <ChevronRight size={16} />
+              </button>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', minWidth: '50px', textAlign: 'center' }}>
+                {page} من {totalPages}
+              </span>
+              <button title="الصفحة التالية" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', color: page === totalPages ? '#D1D5DB' : '#6B7280', display: 'flex', alignItems: 'center', minHeight: '36px', transition: 'all 0.15s' }}>
+                <ChevronLeft size={16} />
+              </button>
             </div>
 
             <p className="mob-hide" style={{ fontSize: '12px', color: '#9CA3AF' }}>{filtered.length} طالب من أصل {students.length}</p>

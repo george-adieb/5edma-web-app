@@ -78,7 +78,6 @@ export async function fetchFollowUpCandidates(recentFridays) {
     byStudent[rec.student_id].push(rec);
   }
 
-  // Sort each student's records newest first (ISO string comparison works for dates)
   for (const id of Object.keys(byStudent)) {
     byStudent[id].sort((a, b) => b.attendance_date.localeCompare(a.attendance_date));
   }
@@ -89,44 +88,86 @@ export async function fetchFollowUpCandidates(recentFridays) {
     const totalAbsences = recs.filter(r => r.status === 'غائب').length;
     if (totalAbsences === 0) continue; // no absences → not a follow-up candidate
 
+    const latestAbsence = recs.find(r => r.status === 'غائب');
+    const latestAbsenceDate = latestAbsence ? latestAbsence.attendance_date : null;
+
     // Consecutive streak: scan newest → oldest, count leading غائب records.
-    // A حاضر or معتذر record breaks the streak.
-    // (To treat معتذر as "not absent" and allow the streak to continue, simply
-    //  change the condition below from `r.status === 'غائب'` to
-    //  `r.status !== 'حاضر'`.)
     let consecutive = 0;
     for (const r of recs) {
       if (r.status === 'غائب') consecutive++;
       else break;
     }
 
-    metrics.push({ studentId, totalAbsences, consecutive });
+    metrics.push({ studentId, totalAbsences, consecutive, latestAbsenceDate });
   }
 
   if (metrics.length === 0) return [];
 
+  // Fetch latest follow-up log for these students
+  const ids = metrics.map(m => m.studentId);
+  const { data: logs, error: eLogs } = await supabase
+    .from('follow_up_logs')
+    .select('student_id, contact_status, created_at, type')
+    .in('student_id', ids)
+    .order('created_at', { ascending: false });
+
+  const latestLogs = {};
+  for (const log of (logs || [])) {
+    if (!latestLogs[log.student_id]) {
+      latestLogs[log.student_id] = log;
+    }
+  }
+
+  const resolvedStatuses = ['تم التواصل', 'عاد للانتظام', 'منتظم'];
+
+  // Filter out candidates if their latest log marks them as resolved AFTER their latest absence
+  const activeMetrics = metrics.filter(m => {
+    const lat = latestLogs[m.studentId];
+    if (!lat) return true; // keep
+
+    if (resolvedStatuses.includes(lat.contact_status)) {
+      // Check if the log was created on or after the day of the latest absence
+      if (lat.created_at.localeCompare(m.latestAbsenceDate) >= 0) {
+        return false; // exclude
+      }
+    }
+    return true; // keep
+  });
+
+  if (activeMetrics.length === 0) return [];
+
   // Sort: consecutive desc, then totalAbsences desc
-  metrics.sort((a, b) =>
+  activeMetrics.sort((a, b) =>
     b.consecutive  - a.consecutive  ||
     b.totalAbsences - a.totalAbsences
   );
 
-  // Fetch student details in a single query
-  const ids = metrics.map(m => m.studentId);
+  // Fetch student details
+  const activeIds = activeMetrics.map(m => m.studentId);
   const { data: students, error: e2 } = await supabase
     .from('students')
     .select('id, name, grade, avatar, avatar_color, parent_phone, status')
-    .in('id', ids);
+    .in('id', activeIds);
   if (e2) throw e2;
 
   const studentMap = Object.fromEntries((students || []).map(s => [String(s.id), s]));
 
-  // Merge and return in sorted order
-  return metrics
+  // Merge and return
+  return activeMetrics
     .map(m => {
       const s = studentMap[String(m.studentId)];
       if (!s) return null;
-      return { ...s, absenceTotal: m.totalAbsences, absenceConsecutive: m.consecutive };
+      const lat = latestLogs[m.studentId];
+      return { 
+        ...s, 
+        absenceTotal: m.totalAbsences, 
+        absenceConsecutive: m.consecutive, 
+        latestLog: lat ? {
+          type: lat.type,
+          contact_status: lat.contact_status,
+          time: timeAgo(lat.created_at)
+        } : null
+      };
     })
     .filter(Boolean);
 }
@@ -382,7 +423,10 @@ export async function upsertFollowUp(followUpData) {
 export async function fetchFollowUpLogs(limit = 10, studentId = null) {
   let query = supabase
     .from('follow_up_logs')
-    .select('*')
+    .select(`
+      *,
+      students (name)
+    `)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -390,22 +434,39 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null) {
 
   const { data, error } = await query;
   if (error) throw error;
+  
   return data.map(log => ({
     ...log,
+    // Derive student_name from join
+    student_name: log.students?.name || 'طالب غير معروف',
+    // Servant name would also be derived via join (e.g. profiles or servants) if needed later
     time: timeAgo(log.created_at),
   }));
 }
 
 /** Save a new follow-up log entry */
-export async function saveFollowUpLog({ studentId, studentName, type, notes, contactStatus, servantName = 'أ. مينا كمال' }) {
-  const { error } = await supabase.from('follow_up_logs').insert({
+export async function saveFollowUpLog({ studentId, followUpId, type, notes, contactStatus }) {
+  // Try to get the current authenticated user safely
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
+  const payload = {
     student_id:    studentId,
-    student_name:  studentName,
     type,
     notes,
     contact_status: contactStatus,
-    servant_name:   servantName,
-  });
+  };
+  
+  if (followUpId) {
+    payload.follow_up_id = followUpId;
+  }
+
+  // Only append recorded_by if we have a valid UUID reference
+  if (userId) {
+    payload.recorded_by = userId;
+  }
+
+  const { error } = await supabase.from('follow_up_logs').insert(payload);
   if (error) throw error;
 }
 
@@ -421,14 +482,9 @@ export async function saveFollowUpLog({ studentId, studentName, type, notes, con
  * @returns {Promise<number>}
  */
 export async function fetchFollowUpCount(recentFridays) {
-  if (!recentFridays?.length) return 0;
-  const { data, error } = await supabase
-    .from('attendance_records')
-    .select('student_id')
-    .in('attendance_date', recentFridays)
-    .eq('status', 'غائب');
-  if (error) throw error;
-  return new Set((data || []).map(r => r.student_id)).size;
+  // Use the updated candidate logic to reflect the correct count of active unresolved cases natively
+  const candidates = await fetchFollowUpCandidates(recentFridays);
+  return candidates.length;
 }
 
 // ─── DASHBOARD STATS ──────────────────────────────────────────────────────────

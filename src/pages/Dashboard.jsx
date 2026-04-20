@@ -103,13 +103,13 @@ export default function Dashboard() {
       {/* Partial-error banner — shown when stats failed but page didn't crash */}
       {error && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end',
+          display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start',
           background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: '10px',
           padding: '10px 14px', marginBottom: '16px',
           fontSize: '12px', fontWeight: 700, color: '#D97706',
         }}>
-          <span>{error}</span>
           <AlertCircle size={14} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -125,11 +125,11 @@ export default function Dashboard() {
             <span style={{
               fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
               background: '#DCFCE7', color: '#16A34A',
-            }}>‹ التفاصيل</span>
+            }}>اليوم</span>
             <span style={{
               fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
               background: '#DCFCE7', color: '#16A34A',
-            }}>اليوم</span>
+            }}>التفاصيل ‹</span>
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '4px' }}>حضور اليوم</p>
@@ -238,16 +238,16 @@ export default function Dashboard() {
         {/* بانتظار الافتقاد */}
         <div style={S.card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <button
-              onClick={() => navigate('/followup')}
-              style={{ fontSize: '12px', fontWeight: 700, color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer' }}
-            >مشاهدة الكل</button>
             <div style={{ textAlign: 'right' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>بانتظار الافتقاد</h2>
               <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>
                 الطلاب الغائبون بانتظار تواصل الخادم معهم.
               </p>
             </div>
+            <button
+              onClick={() => navigate('/followup')}
+              style={{ fontSize: '12px', fontWeight: 700, color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer' }}
+            >مشاهدة الكل ‹</button>
           </div>
 
           {/* Loading skeleton rows */}
@@ -272,6 +272,19 @@ export default function Dashboard() {
               direction: 'rtl',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                    background: student.avatar_color || student.avatarColor || '#8B1A1A',
+                    color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '10px', fontWeight: 700,
+                  }}>{student.avatar}</div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
+                    <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   <a href={`tel:${student.parent_phone || student.parentPhone}`} style={{
                     width: '30px', height: '30px', borderRadius: '7px',
@@ -294,26 +307,13 @@ export default function Dashboard() {
                     <Save size={11} />إضافة ملاحظة
                   </button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
-                    <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
-                  </div>
-                  <div style={{
-                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                    background: student.avatar_color || student.avatarColor || '#8B1A1A',
-                    color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '10px', fontWeight: 700,
-                  }}>{student.avatar}</div>
-                </div>
               </div>
-              <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11px', color: '#6B7280' }}>لم يتم التواصل</span>
+              <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{
                   fontSize: '11px', padding: '3px 8px', borderRadius: '20px',
                   background: '#FEE2E2', color: '#DC2626', fontWeight: 600,
                 }}>غائب هذا الأسبوع</span>
+                <span style={{ fontSize: '11px', color: '#6B7280' }}>لم يتم التواصل</span>
               </div>
             </div>
           ))}
@@ -333,8 +333,8 @@ export default function Dashboard() {
           boxShadow: '0 4px 16px rgba(139,26,26,0.25)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
             <span style={{ fontSize: '18px' }}>⚠️</span>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {alerts.map(alert => (
@@ -343,9 +343,9 @@ export default function Dashboard() {
                 padding: '12px 14px', textAlign: 'right',
                 border: '1px solid rgba(255,255,255,0.1)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{alert.title}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', justifyContent: 'flex-start' }}>
                   <span style={{ fontSize: '16px' }}>{alert.icon}</span>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{alert.title}</p>
                 </div>
                 <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
                   {alert.text}

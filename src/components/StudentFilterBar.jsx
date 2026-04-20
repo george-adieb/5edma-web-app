@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { STAGE_YEAR_CONFIG } from '../data/mockData';
 import { REVERSE_GRADE_MAP } from '../data/constants';
 
 export function useStudentFilters(students) {
-  const [search, setSearch] = useState('');
+  const { globalSearch, setGlobalSearch } = useOutletContext() || { globalSearch: '', setGlobalSearch: () => {} };
   const [stage, setStage]   = useState('all');
   const [year, setYear]     = useState('all');
 
@@ -12,8 +13,8 @@ export function useStudentFilters(students) {
 
   const baseFiltered = useMemo(() => {
     return students.filter(s => {
-      if (search) {
-        const q     = search.toLowerCase();
+      if (globalSearch) {
+        const q     = globalSearch.toLowerCase();
         const sName = (s.name || '').toLowerCase();
         const sCode = (s.code || '').toLowerCase();
         if (!sName.includes(q) && !sCode.includes(q)) return false;
@@ -30,15 +31,15 @@ export function useStudentFilters(students) {
       }
       return true;
     });
-  }, [students, search, stage, year, stageConfig, stageGradeIds]);
+  }, [students, globalSearch, stage, year, stageConfig, stageGradeIds]);
 
   return {
-    search, setSearch,
+    search: globalSearch, setSearch: setGlobalSearch,
     stage, setStage,
     year, setYear,
     stageConfig,
     baseFiltered,
-    clearFilters: () => { setSearch(''); setStage('all'); setYear('all'); }
+    clearFilters: () => { setGlobalSearch(''); setStage('all'); setYear('all'); }
   };
 }
 
@@ -73,15 +74,16 @@ export default function StudentFilterBar({
       background: 'white', borderRadius: '12px', padding: '14px 16px',
       marginBottom: '14px', border: '1px solid #F3F4F6',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      direction: 'rtl',
     }}>
       {/* Top row: count + search */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-          <span style={{ fontSize: '28px', fontWeight: 900, color: '#111827' }}>{filteredCount}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, textAlign: 'right' }}>
           <div>
-            <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', lineHeight: 1.2 }}>إجمالي</p>
-            <p style={{ fontSize: '10px', color: '#9CA3AF', lineHeight: 1.2 }}>من {totalCount}</p>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', lineHeight: 1.2 }}>إجمالي البحث</p>
+            <p style={{ fontSize: '10px', color: '#9CA3AF', lineHeight: 1.2 }}>من {totalCount} إجمالي</p>
           </div>
+          <span style={{ fontSize: '28px', fontWeight: 900, color: '#111827' }}>{filteredCount}</span>
         </div>
         {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: '140px', maxWidth: '280px' }}>
@@ -150,7 +152,7 @@ export default function StudentFilterBar({
           <button
             onClick={() => { onClearFilters(); if (onResetPage) onResetPage(); }}
             style={{
-              marginRight: 'auto', padding: '5px 10px', borderRadius: '20px',
+              marginInlineStart: 'auto', padding: '5px 10px', borderRadius: '20px',
               border: '1px solid #FECACA', background: '#FEF2F2',
               color: '#DC2626', fontFamily: 'Cairo, sans-serif',
               fontSize: '11px', fontWeight: 700, cursor: 'pointer',
@@ -158,7 +160,7 @@ export default function StudentFilterBar({
               whiteSpace: 'nowrap',
             }}
           >
-            إلغاء التصفيات ✕
+            ✕ إلغاء التصفية
           </button>
         )}
       </div>

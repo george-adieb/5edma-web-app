@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Loader2, UserPlus } from 'lucide-react';
 import { servantRoles, servantStages, servants as mockServants } from '../data/mockData';
 import { useIsMobile } from '../hooks/useWindowWidth';
@@ -13,11 +13,11 @@ const COLS = '2.5fr 1.5fr 1.5fr 1fr 1fr';
 
 export default function ServantsPage() {
   const navigate = useNavigate();
+  const { globalSearch, setGlobalSearch } = useOutletContext() || { globalSearch: '', setGlobalSearch: () => {} };
   const isMobile = useIsMobile();
   const [servants, setServants] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
-  const [search,   setSearch]   = useState('');
   const [stage,    setStage]    = useState('all');
   const [role,     setRole]     = useState('all');
   const [page,     setPage]     = useState(1);
@@ -29,10 +29,18 @@ export default function ServantsPage() {
   }, []);
 
   const filtered = servants.filter(s => {
-    const q  = s.name.includes(search) || (s.email || '').includes(search);
+    let matchSearch = true;
+    if (globalSearch) {
+      const q = globalSearch.toLowerCase();
+      const sName = (s.name || '').toLowerCase();
+      const sEmail = (s.email || '').toLowerCase();
+      const sRole = (s.role || '').toLowerCase();
+      const sStage = (s.stage || s.stage_group || '').toLowerCase();
+      matchSearch = sName.includes(q) || sEmail.includes(q) || sRole.includes(q) || sStage.includes(q);
+    }
     const r  = role  === 'all' || s.role  === role;
     const st = stage === 'all' || s.stage === stage;
-    return q && r && st;
+    return matchSearch && r && st;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
@@ -75,6 +83,12 @@ export default function ServantsPage() {
         <>
           {/* Page header — responsive flex */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ textAlign: 'right' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>قائمة الخدام</h1>
+              <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
+                إدارة وتفاصيل خدام الخدمة والاجتماعات
+              </p>
+            </div>
             <button onClick={() => navigate('/servants/new')} style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               padding: '10px 16px', borderRadius: '10px',
@@ -87,12 +101,6 @@ export default function ServantsPage() {
               <UserPlus size={16} />
               إضافة خادم
             </button>
-            <div style={{ textAlign: 'right' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>قائمة الخدام</h1>
-              <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
-                إدارة وتفاصيل خدام الخدمة والاجتماعات
-              </p>
-            </div>
           </div>
 
           {/* Filter bar */}
@@ -102,13 +110,13 @@ export default function ServantsPage() {
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
             {/* Count + Search */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                <span style={{ fontSize: '28px', fontWeight: 900, color: '#111827' }}>{filtered.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, textAlign: 'right' }}>
                 <div>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', lineHeight: 1.2 }}>إجمالي</p>
-                  <p style={{ fontSize: '10px', color: '#9CA3AF', lineHeight: 1.2 }}>من {servants.length}</p>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', lineHeight: 1.2 }}>إجمالي البحث</p>
+                  <p style={{ fontSize: '10px', color: '#9CA3AF', lineHeight: 1.2 }}>من {servants.length} إجمالي</p>
                 </div>
+                <span style={{ fontSize: '28px', fontWeight: 900, color: '#111827' }}>{filtered.length}</span>
               </div>
               <div style={{ position: 'relative', flex: 1, minWidth: '140px', maxWidth: '280px' }}>
                 <svg style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }}
@@ -117,8 +125,8 @@ export default function ServantsPage() {
                 </svg>
                 <input
                   placeholder="ابحث بالاسم أو البريد..."
-                  value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(1); }}
+                  value={globalSearch}
+                  onChange={e => { setGlobalSearch(e.target.value); setPage(1); }}
                   style={{
                     width: '100%', padding: '8px 34px 8px 12px',
                     background: '#F9FAFB', border: '1.5px solid #F3F4F6',
@@ -228,7 +236,7 @@ export default function ServantsPage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '12px', fontWeight: 700,
                     }}>{s.avatar}</div>
-                    <div>
+                    <div style={{ textAlign: 'right' }}>
                       <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
                       <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>{s.email || s.phone || '—'}</p>
                     </div>

@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState('');
+  const location = useLocation();
+
+  useEffect(() => {
+    setGlobalSearch('');
+  }, [location.pathname]);
 
   const openSidebar  = () => setSidebarOpen(true);
   const closeSidebar = () => setSidebarOpen(false);
@@ -23,9 +29,9 @@ export default function AppLayout() {
 
       {/* Main content */}
       <div className="main-content">
-        <TopBar onMenuClick={openSidebar} />
+        <TopBar onMenuClick={openSidebar} globalSearch={globalSearch} setGlobalSearch={setGlobalSearch} />
         <div className="page-content">
-          <Outlet />
+          <Outlet context={{ globalSearch, setGlobalSearch }} />
         </div>
       </div>
     </div>
