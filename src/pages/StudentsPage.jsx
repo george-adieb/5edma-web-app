@@ -32,7 +32,7 @@ export default function StudentsPage() {
     setLoading(true);
     fetchStudents()
       .then(data => setStudents(data))
-      .catch(err  => { console.error(err); setError('تعذّر تحميل بيانات الطلاب'); })
+      .catch(err  => { console.error(err); setError('تعذّر تحميل بيانات المخدومين'); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -57,7 +57,7 @@ export default function StudentsPage() {
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px', gap: '10px' }}>
           <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: '#8B1A1A' }} />
-          <p style={{ fontSize: '14px', color: '#9CA3AF' }}>جارٍ تحميل الطلاب...</p>
+          <p style={{ fontSize: '14px', color: '#9CA3AF' }}>جارٍ تحميل المخدومين...</p>
         </div>
       )}
 
@@ -79,7 +79,7 @@ export default function StudentsPage() {
           <div style={{ textAlign: 'right', marginBottom: '18px' }}>
             <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>قائمة المخدومين</h1>
             <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
-              إدارة بيانات الطلاب، متابعة الحالات، وتحديث سجلات الحضور والافتقاد.
+              إدارة بيانات المخدومين، متابعة الحالات، وتحديث سجلات الحضور والافتقاد.
             </p>
           </div>
 
@@ -118,7 +118,7 @@ export default function StudentsPage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6', direction: 'rtl',
               }}>
-                {['الطالب', 'الكود', 'المرحلة', 'الحالة', 'آخر حضور', ''].map((h, i) => (
+                {['المخدوم', 'الكود', 'المرحلة', 'الحالة', 'آخر حضور', ''].map((h, i) => (
                   <p key={i} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
@@ -254,7 +254,7 @@ export default function StudentsPage() {
                 {totalPages > 5 && <span style={{ fontSize: '12px', color: '#9CA3AF', padding: '0 4px' }}>...</span>}
               </div>
               <p style={{ fontSize: '12px', color: '#9CA3AF' }}>
-                عرض {visible.length} من أصل {filtered.length} طالب
+                عرض {visible.length} من أصل {filtered.length} مخدوم
               </p>
             </div>
           </div>

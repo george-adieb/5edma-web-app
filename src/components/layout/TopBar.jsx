@@ -7,8 +7,8 @@ import { performGlobalSearch } from '../../lib/database';
 const PAGE_LABELS = {
   '/':              'نظرة عامة',
   '/attendance':    'الحضور',
-  '/students':      'الطلاب',
-  '/students/new':  'إضافة طالب جديد',
+  '/students':      'المخدومين',
+  '/students/new':  'إضافة مخدوم جديد',
   '/servants':      'الخدام',
   '/followup':      'الافتقاد',
   '/settings':      'الإعدادات',
@@ -84,7 +84,7 @@ export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
   };
 
   const pageLabel = PAGE_LABELS[location.pathname] ||
-    (location.pathname.startsWith('/students/') ? 'ملف الطالب' : 'الصفحة');
+    (location.pathname.startsWith('/students/') ? 'ملف المخدوم' : 'الصفحة');
 
   const displayName = profile?.full_name || user?.email?.split('@')[0] || 'المستخدم';
   const roleName    = profile?.role ? ROLE_LABELS[profile.role] || profile.role : 'زائر';
@@ -195,7 +195,7 @@ export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
                     <div>
                       <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827', margin: 0 }}>{nameStr}</p>
                       <p style={{ fontSize: '11px', color: '#9CA3AF', margin: 0, marginTop: '2px' }}>
-                        {item.type === 'student' ? 'طالب' : 'خادم'} • {item.code || item.role || '—'}
+                        {item.type === 'student' ? 'مخدوم' : 'خادم'} • {item.code || item.role || '—'}
                       </p>
                     </div>
                   </div>

@@ -167,7 +167,7 @@ export default function AddStudentPage() {
       }
     } catch (err) {
       console.error('[AddStudentPage] insert failed →', err);
-      setSubmitError(`تعذّر حفظ الطالب: ${err?.message || 'حدث خطأ غير متوقع'}`);
+      setSubmitError(`تعذّر حفظ المخدوم: ${err?.message || 'حدث خطأ غير متوقع'}`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setSaving(false);
@@ -179,12 +179,12 @@ export default function AddStudentPage() {
 
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', justifyContent: 'flex-end' }}>
-        <span style={{ fontSize: '14px', fontWeight: 800, color: '#8B1A1A' }}>إضافة طالب جديد</span>
+        <span style={{ fontSize: '14px', fontWeight: 800, color: '#8B1A1A' }}>إضافة مخدوم جديد</span>
         <span style={{ color: '#D1D5DB', fontSize: '13px' }}>‹</span>
         <button onClick={() => navigate('/students')} style={{
           fontSize: '13px', color: '#6B7280', background: 'none',
           border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif',
-        }}>الطلاب</button>
+        }}>المخدومين</button>
       </div>
 
       {/* Success toast */}
@@ -196,7 +196,7 @@ export default function AddStudentPage() {
           boxShadow: '0 4px 16px rgba(22,163,74,0.35)', animation: 'fadeIn 0.3s ease',
           display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap',
         }}>
-          ✓ تم حفظ الطالب بنجاح!
+          ✓ تم حفظ المخدوم بنجاح!
         </div>
       )}
 
@@ -233,7 +233,7 @@ export default function AddStudentPage() {
               <div data-has-error={!!errors.fullName}>
                 <FormGroup label="الاسم الكامل (رباعي)" error={errors.fullName}>
                   <input value={form.fullName} onChange={e => set('fullName', e.target.value)}
-                    placeholder="أدخل اسم الطالب كما في شهادة الميلاد" style={IS(errors.fullName)}
+                    placeholder="أدخل اسم المخدوم كما في شهادة الميلاد" style={IS(errors.fullName)}
                     onFocus={e => e.target.style.borderColor = '#8B1A1A'}
                     onBlur={e  => e.target.style.borderColor = errors.fullName ? '#FCA5A5' : '#E5E7EB'} />
                 </FormGroup>
@@ -372,7 +372,7 @@ export default function AddStudentPage() {
               transition: 'all 0.2s', minHeight: '44px', justifyContent: 'center',
             }}>
               <Save size={15} />
-              {saving ? 'جارٍ الحفظ...' : 'حفظ الطالب'}
+              {saving ? 'جارٍ الحفظ...' : 'حفظ المخدوم'}
             </button>
           </div>
         </div>
@@ -406,8 +406,8 @@ export default function AddStudentPage() {
             <FormGroup label="حالة المتابعة الأولية">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
                 {[
-                  { value: 'منتظم',        label: 'طالب منتظم',              sub: 'يحضر بانتظام', color: '#16A34A', bg: '#F0FDF4', border: '#86EFAC' },
-                  { value: 'جديد',          label: 'طالب جديد (يحتاج زيارة)', sub: 'أول مرة',      color: '#1D4ED8', bg: '#EFF6FF', border: '#93C5FD' },
+                  { value: 'منتظم',        label: 'مخدوم منتظم',              sub: 'يحضر بانتظام', color: '#16A34A', bg: '#F0FDF4', border: '#86EFAC' },
+                  { value: 'جديد',          label: 'مخدوم جديد (يحتاج زيارة)', sub: 'أول مرة',      color: '#1D4ED8', bg: '#EFF6FF', border: '#93C5FD' },
                   { value: 'يحتاج افتقاد', label: 'منقطع (يحتاج افتقاد)',    sub: 'غائب فترة',   color: '#DC2626', bg: '#FEF2F2', border: '#FCA5A5' },
                 ].map(opt => (
                   <label key={opt.value} style={{

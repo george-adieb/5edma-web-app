@@ -176,7 +176,7 @@ export default function EditStudentPage() {
         });
       } catch (err) {
         console.error('Failed to load student:', err);
-        setSubmitError('تعذّر تحميل بيانات الطالب. قد يكون السجل غير موجود.');
+        setSubmitError('تعذّر تحميل بيانات المخدوم. قد يكون السجل غير موجود.');
       } finally {
         setLoadingInitial(false);
       }
@@ -243,17 +243,17 @@ export default function EditStudentPage() {
         display: 'flex', alignItems: 'center', gap: '8px',
         marginBottom: '18px', justifyContent: 'flex-end',
       }}>
-        <span style={{ fontSize: '14px', fontWeight: 800, color: '#8B1A1A' }}>تعديل بيانات الطالب</span>
+        <span style={{ fontSize: '14px', fontWeight: 800, color: '#8B1A1A' }}>تعديل بيانات المخدوم</span>
         <span style={{ color: '#D1D5DB', fontSize: '13px' }}>‹</span>
         <button onClick={() => navigate(`/students/${id}`)} style={{
           fontSize: '13px', color: '#6B7280', background: 'none',
           border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif',
-        }}>ملف الطالب</button>
+        }}>ملف المخدوم</button>
         <span style={{ color: '#D1D5DB', fontSize: '13px' }}>‹</span>
         <button onClick={() => navigate('/students')} style={{
           fontSize: '13px', color: '#6B7280', background: 'none',
           border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif',
-        }}>الطلاب</button>
+        }}>المخدومين</button>
       </div>
 
       {/* Error banner */}
@@ -295,7 +295,7 @@ export default function EditStudentPage() {
                   <input
                     value={form.fullName}
                     onChange={e => set('fullName', e.target.value)}
-                    placeholder="أدخل اسم الطالب كما في شهادة الميلاد"
+                    placeholder="أدخل اسم المخدوم كما في شهادة الميلاد"
                     style={IS(errors.fullName)}
                     onFocus={e => e.target.style.borderColor = '#8B1A1A'}
                     onBlur={e => e.target.style.borderColor = errors.fullName ? '#FCA5A5' : '#E5E7EB'}
@@ -489,8 +489,8 @@ export default function EditStudentPage() {
             <FormGroup label="حالة المتابعة الأولية">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
                 {[
-                  { value: 'منتظم',          label: 'طالب منتظم',              sub: 'يحضر بانتظام', color: '#16A34A', bg: '#F0FDF4', border: '#86EFAC' },
-                  { value: 'جديد',            label: 'طالب جديد (يحتاج زيارة)', sub: 'أول مرة', color: '#1D4ED8', bg: '#EFF6FF', border: '#93C5FD' },
+                  { value: 'منتظم',          label: 'مخدوم منتظم',              sub: 'يحضر بانتظام', color: '#16A34A', bg: '#F0FDF4', border: '#86EFAC' },
+                  { value: 'جديد',            label: 'مخدوم جديد (يحتاج زيارة)', sub: 'أول مرة', color: '#1D4ED8', bg: '#EFF6FF', border: '#93C5FD' },
                   { value: 'يحتاج افتقاد',   label: 'منقطع (يحتاج افتقاد)',    sub: 'غائب فترة', color: '#DC2626', bg: '#FEF2F2', border: '#FCA5A5' },
                 ].map(opt => (
                   <label key={opt.value} style={{

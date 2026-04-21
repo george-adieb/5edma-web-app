@@ -6,7 +6,7 @@ import {
 const navItems = [
   { to: '/',          icon: LayoutDashboard, label: 'لوحة التحكم' },
   { to: '/attendance', icon: CalendarCheck,   label: 'الحضور'      },
-  { to: '/students',  icon: Users,            label: 'الطلاب'      },
+  { to: '/students',  icon: Users,            label: 'المخدومين'      },
   { to: '/servants',  icon: User,             label: 'الخدام'      },
   { to: '/followup',  icon: Heart,            label: 'الافتقاد'    },
   { to: '/settings',  icon: Settings,         label: 'الإعدادات'   },
@@ -21,7 +21,7 @@ function ContextualAddBtn({ onClose }) {
 
   if (location.pathname.startsWith('/students')) {
     targetPath = '/students/new';
-    label = 'إضافة طالب جديد';
+    label = 'إضافة مخدوم جديد';
   } else if (location.pathname.startsWith('/servants')) {
     targetPath = '/servants/new';
     label = 'إضافة خادم جديد';

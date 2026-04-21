@@ -226,7 +226,7 @@ export default function AttendancePage() {
             <div style={{ background: 'white', borderRadius: '12px', padding: '14px 16px', border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '12px', color: '#9CA3AF' }}>إجمالي الطلاب</p>
+                  <p style={{ fontSize: '12px', color: '#9CA3AF' }}>إجمالي المخدومين</p>
                   <p style={{ fontSize: '30px', fontWeight: 900, color: '#111827', lineHeight: 1 }}>{students.length}</p>
                 </div>
                 <span style={{ fontSize: '24px' }}>🧑‍🎓</span>
@@ -283,7 +283,7 @@ export default function AttendancePage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6',
               }}>
-                {['اسم الطالب', 'آخر حضور', 'حالة الحضور'].map((h, i) => (
+                {['اسم المخدوم', 'آخر حضور', 'حالة الحضور'].map((h, i) => (
                   <p key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
@@ -411,7 +411,7 @@ export default function AttendancePage() {
               </button>
             </div>
 
-            <p className="mob-hide" style={{ fontSize: '12px', color: '#9CA3AF' }}>{filtered.length} طالب من أصل {students.length}</p>
+            <p className="mob-hide" style={{ fontSize: '12px', color: '#9CA3AF' }}>{filtered.length} مخدوم من أصل {students.length}</p>
 
             {/* Save button */}
             {saved ? (

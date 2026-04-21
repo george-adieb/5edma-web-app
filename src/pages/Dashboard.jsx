@@ -188,7 +188,7 @@ export default function Dashboard() {
                   <span style={{ fontSize: '40px', fontWeight: 900, color: '#111827', lineHeight: 1 }}>
                     {presentCount}
                   </span>
-                  <span style={{ fontSize: '13px', color: '#9CA3AF' }}>/ {totalStudents} طالب</span>
+                  <span style={{ fontSize: '13px', color: '#9CA3AF' }}>/ {totalStudents} مخدوم</span>
                 </>
               )}
             </div>
@@ -288,7 +288,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'right' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>بانتظار الافتقاد</h2>
               <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>
-                الطلاب الغائبون بانتظار تواصل الخادم معهم.
+                المخدومين الغائبون بانتظار تواصل الخادم معهم.
               </p>
             </div>
             <button

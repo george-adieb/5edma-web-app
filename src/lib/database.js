@@ -439,7 +439,7 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null) {
   return data.map(log => ({
     ...log,
     // Derive student_name from join
-    student_name: log.students?.name || 'طالب غير معروف',
+    student_name: log.students?.name || 'مخدوم غير معروف',
     // Servant name derived from profiles
     servant_name: log.profiles?.full_name || log.recorded_by,
     time: timeAgo(log.created_at),

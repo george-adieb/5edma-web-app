@@ -208,7 +208,7 @@ export default function FollowUpPage() {
 
           {/* Student selector */}
           <div style={{ marginBottom: '14px', textAlign: 'right' }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', display: 'block', marginBottom: '6px' }}>الطالب</label>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', display: 'block', marginBottom: '6px' }}>المخدوم</label>
             {loading ? (
               <Skel h="42px" radius="8px" />
             ) : filteredFollowUpStudents.length === 0 ? (
@@ -217,7 +217,7 @@ export default function FollowUpPage() {
                 border: '1.5px solid #86EFAC', fontSize: '13px', color: '#16A34A',
                 fontWeight: 700, textAlign: 'right',
               }}>
-                🎉 لا يوجد طلاب يحتاجون افتقاداً الآن
+                🎉 لا يوجد مخدومين يحتاجون افتقاداً الآن
               </div>
             ) : (
               <select
@@ -336,7 +336,7 @@ export default function FollowUpPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#9CA3AF' }}>
-              {loading ? '...' : `${filteredFollowUpStudents.length} طالب`}
+              {loading ? '...' : `${filteredFollowUpStudents.length} مخدوم`}
             </span>
             <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>قائمة المتابعة</h2>
           </div>
@@ -466,7 +466,7 @@ export default function FollowUpPage() {
               }}>
                 <p style={{ fontSize: '28px', marginBottom: '8px' }}>🎉</p>
                 <p style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>ما شاء الله!</p>
-                <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>لا يوجد طلاب يحتاجون متابعة حالياً</p>
+                <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>لا يوجد مخدومين يحتاجون متابعة حالياً</p>
               </div>
             )}
 
