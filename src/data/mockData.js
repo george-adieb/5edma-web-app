@@ -420,26 +420,6 @@ export const dashboardStats = {
   attendanceRate: 85,
 };
 
-// Important alerts
-export const alerts = [
-  {
-    id: 1,
-    type: 'birthday',
-    icon: '🎂',
-    title: 'عيد ميلاد اليوم',
-    text: '٣ طلاب لديهم أعياد ميلاد اليوم. لا تنسَ المعايدة!',
-    color: 'gold',
-  },
-  {
-    id: 2,
-    type: 'meeting',
-    icon: '📋',
-    title: 'اجتماع الخدام',
-    text: 'اليوم في تمام الساعة ٧ مساءً في القاعة المعروفة.',
-    color: 'red',
-  },
-];
-
 // Absent today (for dashboard)
 export const absentToday = students.filter(s =>
   todayAttendance.records[s.id] === 'غائب'

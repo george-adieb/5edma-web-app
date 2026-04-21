@@ -425,7 +425,8 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null) {
     .from('follow_up_logs')
     .select(`
       *,
-      students (name)
+      students!student_id (name),
+      profiles!recorded_by (full_name)
     `)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -439,7 +440,8 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null) {
     ...log,
     // Derive student_name from join
     student_name: log.students?.name || 'طالب غير معروف',
-    // Servant name would also be derived via join (e.g. profiles or servants) if needed later
+    // Servant name derived from profiles
+    servant_name: log.profiles?.full_name || log.recorded_by,
     time: timeAgo(log.created_at),
   }));
 }
@@ -466,8 +468,36 @@ export async function saveFollowUpLog({ studentId, followUpId, type, notes, cont
     payload.recorded_by = userId;
   }
 
-  const { error } = await supabase.from('follow_up_logs').insert(payload);
-  if (error) throw error;
+  console.log('[saveFollowUpLog] Executing insert with payload:', payload);
+
+  const { data, error } = await supabase.from('follow_up_logs').insert(payload).select();
+  if (error) {
+    console.error('[saveFollowUpLog] Supabase error encountered:', error);
+    throw error;
+  }
+  
+  console.log('[saveFollowUpLog] Success:', data);
+}
+
+/** Update an existing follow-up log entry */
+export async function updateFollowUpLog(logId, { type, notes }) {
+  const payload = {
+    type,
+    notes,
+  };
+
+  const { data, error } = await supabase
+    .from('follow_up_logs')
+    .update(payload)
+    .eq('id', logId)
+    .select();
+
+  if (error) {
+    console.error('[updateFollowUpLog] Supabase error:', error);
+    throw error;
+  }
+
+  return data;
 }
 
 // ─── FOLLOW-UP COUNT (shared truth) ───────────────────────────────────────────
@@ -603,3 +633,94 @@ function timeAgo(isoString) {
   const days = Math.floor(hrs / 24);
   return `منذ ${days} يوم`;
 }
+
+// ─── SYSTEM ALERTS ────────────────────────────────────────────────────────────
+
+/** Fetch currently active alerts based on start and end dates */
+export async function fetchActiveAlerts() {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
+    .lte('starts_at', now)
+    .gte('ends_at', now)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('[fetchActiveAlerts] Error fetching alerts:', error.message);
+    return []; // Return empty gracefully if table is missing or RLS blocks
+  }
+  return data || [];
+}
+
+/** Insert a new system alert */
+export async function saveSystemAlert({ title, text, type, durationDays }) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(startDate.getDate() + durationDays);
+
+  const payload = {
+    title,
+    description: text,
+    alert_type: type || 'تنبيه',
+    priority: 1,
+    is_active: true,
+    starts_at: startDate.toISOString(),
+    ends_at: endDate.toISOString(),
+  };
+
+  if (userId) payload.created_by = userId;
+
+  console.log('[saveSystemAlert] payload:', payload);
+  const { data, error } = await supabase.from('alerts').insert(payload).select();
+  if (error) {
+    console.error('[saveSystemAlert] Supabase error:', error);
+    throw error;
+  }
+}
+
+// ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
+
+export async function performGlobalSearch(query, context = 'all') {
+  if (!query) return [];
+  const safeQuery = `%${query}%`;
+  
+  const promises = [];
+  
+  if (context === 'all' || context === 'students') {
+    promises.push(
+      supabase.from('students')
+        .select('id, name, code, avatar_color')
+        .or(`name.ilike.${safeQuery},code.ilike.${safeQuery}`)
+        .limit(6)
+        .then(res => ({ type: 'student', data: res.data || [] }))
+    );
+  }
+  
+  if (context === 'all' || context === 'servants') {
+    promises.push(
+      supabase.from('profiles')
+        .select('id, full_name, role')
+        .ilike('full_name', safeQuery)
+        .limit(4)
+        .then(res => ({ type: 'servant', data: res.data || [] }))
+    );
+  }
+  
+  const results = await Promise.all(promises);
+  let finalItems = [];
+  
+  results.forEach(res => {
+    if (res.type === 'student') {
+      res.data.forEach(s => finalItems.push({ ...s, type: 'student' }));
+    } else if (res.type === 'servant') {
+      res.data.forEach(s => finalItems.push({ ...s, type: 'servant' }));
+    }
+  });
+  
+  return finalItems;
+}
+

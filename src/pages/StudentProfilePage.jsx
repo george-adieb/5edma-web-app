@@ -6,6 +6,8 @@ import {
   fetchStudentAttendance,
   fetchFollowUpLogs,
   fetchFollowUpByStudentId,
+  saveFollowUpLog,
+  updateFollowUpLog,
 } from '../lib/database';
 
 const ATT_STYLE = {
@@ -36,6 +38,18 @@ export default function StudentProfilePage() {
   const [followUp,         setFollowUp]         = useState(null);
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState(null);
+
+  // Note form state
+  const [showNoteForm,   setShowNoteForm]   = useState(false);
+  const [newNote,        setNewNote]        = useState('');
+  const [newNoteType,    setNewNoteType]    = useState('مكالمة');
+  const [isSavingNote,   setIsSavingNote]   = useState(false);
+
+  // Edit note state
+  const [editLogId,      setEditLogId]      = useState(null);
+  const [editNote,       setEditNote]       = useState('');
+  const [editNoteType,   setEditNoteType]   = useState('مكالمة');
+  const [isUpdatingNote, setIsUpdatingNote] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -92,7 +106,79 @@ export default function StudentProfilePage() {
   // ── Derived values ───────────────────────────────────────────────────────────
   const badge          = STATUS_BADGE[student.status] || { bg: '#F3F4F6', color: '#6B7280' };
   const avatarColor    = student.avatar_color || '#8B1A1A';
-  const attendanceRate = student.attendance_rate ?? 0;
+  
+  // Natively calculate attendance rate derived from real history records
+  const totalCycles = attendanceHistory.length;
+  const presentCount = attendanceHistory.filter(r => r.status === 'حاضر').length;
+  const attendanceRate = totalCycles > 0 ? Math.round((presentCount / totalCycles) * 100) : 0;
+  const hasHistory = totalCycles > 0;
+  
+  // `attendanceHistory` is sorted newest->oldest by `fetchStudentAttendance`
+  const mostRecentPresent = attendanceHistory.find(r => r.status === 'حاضر');
+  const lastAttendedDate = mostRecentPresent ? mostRecentPresent.date : null;
+
+  async function handleAddNote() {
+    if (!newNote.trim()) return;
+    setIsSavingNote(true);
+    try {
+      await saveFollowUpLog({
+        studentId: student.id,
+        type: newNoteType,
+        notes: newNote,
+        contactStatus: 'تم التواصل', // Strict compliance with valid DB enum states
+      });
+      // Refresh logs inline
+      const updatedLogs = await fetchFollowUpLogs(20, student.id);
+      setFollowUpLogs(updatedLogs);
+      setShowNoteForm(false);
+      setNewNote('');
+    } catch (err) {
+      console.error('Failed to save note:', err);
+      alert('تعذّر حفظ الملاحظة. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsSavingNote(false);
+    }
+  }
+
+  async function handleUpdateNote() {
+    if (!editNote.trim() || !editLogId) return;
+    setIsUpdatingNote(true);
+    try {
+      await updateFollowUpLog(editLogId, { type: editNoteType, notes: editNote });
+      // Refresh logs inline
+      const updatedLogs = await fetchFollowUpLogs(20, student.id);
+      setFollowUpLogs(updatedLogs);
+      setEditLogId(null);
+      setEditNote('');
+    } catch (err) {
+      console.error('Failed to update note:', err);
+      alert('تعذّر تحديث الملاحظة. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsUpdatingNote(false);
+    }
+  }
+
+  function startEdit(log) {
+    setEditLogId(log.id);
+    setEditNote(log.notes || '');
+    setEditNoteType(log.type || 'مكالمة');
+  }
+
+  async function handleShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `ملف الطالب ${student.name}`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.error('Share failed', err);
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('تم نسخ الرابط بنجاح');
+    }
+  }
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -117,12 +203,18 @@ export default function StudentProfilePage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           {/* Actions (left) */}
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button style={{
+            <button
+              onClick={handleShare}
+              title="مشاركة الملف"
+              style={{
               width: '36px', height: '36px', borderRadius: '9px',
               border: '1.5px solid #E5E7EB', background: 'white', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280',
             }}><Share2 size={15} /></button>
-            <button style={{
+            <button
+              onClick={() => navigate(`/students/edit/${student.id}`)}
+              title="تعديل بيانات الطالب"
+              style={{
               width: '36px', height: '36px', borderRadius: '9px',
               border: '1.5px solid #E5E7EB', background: 'white', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280',
@@ -182,7 +274,7 @@ export default function StudentProfilePage() {
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <button style={{ fontSize: '12px', fontWeight: 700, color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => navigate('/attendance')} style={{ fontSize: '12px', fontWeight: 700, color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer' }}>
                 عرض السجل الكامل ›
               </button>
               <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>سجل الحضور الأخير</h3>
@@ -216,33 +308,111 @@ export default function StudentProfilePage() {
             background: 'white', borderRadius: '12px', padding: '18px 20px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <button style={{
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showNoteForm ? '12px' : '6px' }}>
+              <button 
+                onClick={() => setShowNoteForm(!showNoteForm)}
+                style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
                 padding: '7px 14px', borderRadius: '8px',
-                background: '#8B1A1A', color: 'white', border: 'none',
+                background: showNoteForm ? '#F3F4F6' : '#8B1A1A', 
+                color: showNoteForm ? '#374151' : 'white', border: 'none',
                 fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12px', cursor: 'pointer',
-              }}><Plus size={13} />إضافة ملاحظة</button>
+              }}><Plus size={13} style={{ transform: showNoteForm ? 'rotate(45deg)' : 'none', transition: '0.2s' }} />{showNoteForm ? 'إلغاء' : 'إضافة ملاحظة'}</button>
               <div style={{ textAlign: 'right' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>ملاحظات الخادم</h3>
                 <p style={{ fontSize: '11px', color: '#9CA3AF' }}>التاريخ الرعوي وتطور الحالة الروحية</p>
               </div>
             </div>
 
-            {followUpLogs.length === 0 ? (
+            {showNoteForm && (
+              <div style={{ background: '#F9FAFB', borderRadius: '10px', padding: '14px', marginBottom: '16px', border: '1px solid #E5E7EB', textAlign: 'right', animation: 'fadeIn 0.2s ease' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', justifyContent: 'flex-end' }}>
+                  {['رسالة', 'زيارة', 'مكالمة'].map(t => (
+                    <button key={t} onClick={() => setNewNoteType(t)} style={{
+                      padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                      background: newNoteType === t ? '#8B1A1A' : 'white',
+                      color: newNoteType === t ? 'white' : '#6B7280',
+                      border: `1px solid ${newNoteType === t ? '#8B1A1A' : '#D1D5DB'}`, fontFamily: 'Cairo, sans-serif'
+                    }}>{t}</button>
+                  ))}
+                </div>
+                <textarea
+                  value={newNote} onChange={e => setNewNote(e.target.value)}
+                  placeholder="اكتب تفاصيل الملاحظة هنا..."
+                  style={{ width: '100%', height: '65px', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo, sans-serif', fontSize: '12px', resize: 'none', marginBottom: '10px', direction: 'rtl', outline: 'none' }}
+                  onFocus={e => e.target.style.borderColor = '#8B1A1A'}
+                  onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <button onClick={handleAddNote} disabled={isSavingNote || !newNote.trim()} style={{ 
+                    padding: '8px 16px', borderRadius: '8px', background: '#8B1A1A', color: 'white', 
+                    border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                    cursor: (isSavingNote || !newNote.trim()) ? 'not-allowed' : 'pointer',
+                    opacity: (isSavingNote || !newNote.trim()) ? 0.6 : 1,
+                    display: 'flex', alignItems: 'center', gap: '6px'
+                  }}>
+                    {isSavingNote ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> جاري الحفظ...</> : 'حفظ الملاحظة'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!showNoteForm && followUpLogs.length === 0 ? (
               <p style={{ fontSize: '13px', color: '#9CA3AF', textAlign: 'center', padding: '16px' }}>لا توجد ملاحظات</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
                 {followUpLogs.map((log, i) => {
+                  if (editLogId === log.id) {
+                    return (
+                      <div key={log.id} style={{ background: '#F9FAFB', borderRadius: '10px', padding: '14px', border: '1px solid #E5E7EB', textAlign: 'right', animation: 'fadeIn 0.2s ease' }}>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', justifyContent: 'flex-end' }}>
+                          {['رسالة', 'زيارة', 'مكالمة'].map(t => (
+                            <button key={t} onClick={() => setEditNoteType(t)} style={{
+                              padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                              background: editNoteType === t ? '#8B1A1A' : 'white',
+                              color: editNoteType === t ? 'white' : '#6B7280',
+                              border: `1px solid ${editNoteType === t ? '#8B1A1A' : '#D1D5DB'}`, fontFamily: 'Cairo, sans-serif'
+                            }}>{t}</button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={editNote} onChange={e => setEditNote(e.target.value)}
+                          style={{ width: '100%', height: '65px', padding: '10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo, sans-serif', fontSize: '12px', resize: 'none', marginBottom: '10px', direction: 'rtl', outline: 'none' }}
+                          onFocus={e => e.target.style.borderColor = '#8B1A1A'}
+                          onBlur={e => e.target.style.borderColor = '#D1D5DB'}
+                        />
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start' }}>
+                          <button onClick={handleUpdateNote} disabled={isUpdatingNote || !editNote.trim()} style={{ 
+                            padding: '8px 16px', borderRadius: '8px', background: '#8B1A1A', color: 'white', 
+                            border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                            cursor: (isUpdatingNote || !editNote.trim()) ? 'not-allowed' : 'pointer',
+                            opacity: (isUpdatingNote || !editNote.trim()) ? 0.6 : 1,
+                          }}>
+                            {isUpdatingNote ? <><Loader2 size={13} style={{ animation: 'spin 1s linear infinite', display: 'inline-block', marginRight: '6px' }} /> جاري الحفظ...</> : 'حفظ التعديل'}
+                          </button>
+                          <button onClick={() => setEditLogId(null)} style={{ 
+                            padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: '#6B7280', 
+                            border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif', cursor: 'pointer'
+                          }}>إلغاء</button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const t = FU_TYPE[log.type] || { bg: '#F3F4F6', color: '#6B7280', icon: '📝' };
                   return (
-                    <div key={i} style={{
+                    <div key={log.id || i} style={{
                       background: '#F9FAFB', borderRadius: '10px',
                       padding: '12px 14px', textAlign: 'right',
                       border: '1px solid #F3F4F6',
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{log.time}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{log.time}</span>
+                          <button onClick={() => startEdit(log)} style={{
+                            background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: '2px', display: 'flex'
+                          }} title="تعديل الملاحظة"><Edit3 size={12} /></button>
+                        </div>
                         <span style={{
                           fontSize: '11px', padding: '2px 8px', borderRadius: '20px',
                           background: t.bg, color: t.color, fontWeight: 700,
@@ -318,10 +488,12 @@ export default function StudentProfilePage() {
                 color: attendanceRate >= 80 ? '#16A34A' : attendanceRate >= 50 ? '#D97706' : '#DC2626',
                 fontWeight: 700,
               }}>
-                {attendanceRate >= 80 ? 'متفوق' : attendanceRate >= 50 ? 'مقبول' : 'يحتاج متابعة'}
+                {!hasHistory ? 'لا توجد بيانات' : attendanceRate >= 80 ? 'متفوق' : attendanceRate >= 50 ? 'مقبول' : 'يحتاج متابعة'}
               </span>
               <p style={{ fontSize: '11px', color: '#9CA3AF' }}>
-                {student.last_attendance ? `آخر حضور: ${student.last_attendance}` : 'لم يحضر بعد'}
+                {hasHistory
+                  ? (lastAttendedDate ? `آخر حضور: ${lastAttendedDate}` : 'بانتظار الحضور')
+                  : 'لم يحضر بعد'}
               </p>
             </div>
           </div>

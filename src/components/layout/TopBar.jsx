@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Bell, LogOut, Menu, Search } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, LogOut, Menu, Search, Loader2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { performGlobalSearch } from '../../lib/database';
 
 const PAGE_LABELS = {
   '/':              'نظرة عامة',
@@ -24,6 +25,58 @@ export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { user, profile, logout } = useAuth();
+  
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching]     = useState(false);
+  const [showDropdown, setShowDropdown]   = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!globalSearch || globalSearch.length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    
+    let context = 'all';
+    if (location.pathname.startsWith('/students')) context = 'students';
+    else if (location.pathname.startsWith('/servants')) context = 'servants';
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await performGlobalSearch(globalSearch, context);
+        setSearchResults(results);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error('Search failed', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [globalSearch, location.pathname]);
+
+  const handleSelectResult = (item) => {
+    setShowDropdown(false);
+    setGlobalSearch(''); // Clear to close and clean context search string bounds natively 
+    if (item.type === 'student') {
+      navigate(`/students/${item.id}`);
+    } else {
+      // In the future this can jump to a servant profile page if built
+      navigate('/servants'); 
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -81,11 +134,12 @@ export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
       </div>
 
       {/* ── Search (hidden on mobile, show as icon) ── */}
-      <div className="mob-hide" style={{ position: 'relative', width: '280px', marginInlineEnd: 'auto', marginInlineStart: '16px' }}>
-        <Search size={14} style={{
-          position: 'absolute', right: '12px', top: '50%',
-          transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none',
-        }} />
+      <div ref={searchContainerRef} className="mob-hide" style={{ position: 'relative', width: '280px', marginInlineEnd: 'auto', marginInlineStart: '16px' }}>
+        {isSearching ? (
+          <Loader2 size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', animation: 'spin 1s linear infinite' }} />
+        ) : (
+          <Search size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }} />
+        )}
         <input
           type="text"
           placeholder={
@@ -104,9 +158,52 @@ export default function TopBar({ onMenuClick, globalSearch, setGlobalSearch }) {
             fontSize: '13px', color: '#374151', outline: 'none',
             direction: 'rtl',
           }}
-          onFocus={e  => { e.target.style.borderColor = '#8B1A1A'; e.target.style.background = 'white'; }}
+          onFocus={e  => { 
+            e.target.style.borderColor = '#8B1A1A'; 
+            e.target.style.background = 'white'; 
+            if (globalSearch && globalSearch.length >= 2) setShowDropdown(true);
+          }}
           onBlur={e   => { e.target.style.borderColor = '#F3F4F6'; e.target.style.background = '#F9FAFB'; }}
         />
+
+        {/* ── Search Dropdown Overlay ── */}
+        {showDropdown && globalSearch.length >= 2 && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0,
+            marginTop: '8px', background: 'white', border: '1px solid #E5E7EB',
+            borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            maxHeight: '300px', overflowY: 'auto', zIndex: 100, direction: 'rtl',
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            {searchResults.length === 0 && !isSearching ? (
+              <div style={{ padding: '16px', textAlign: 'center', color: '#6B7280', fontSize: '12px' }}>لا توجد نتائج مطابقة</div>
+            ) : (
+              searchResults.map((item, idx) => {
+                const nameStr = item.name || item.full_name || '';
+                return (
+                  <div key={item.id + idx} onClick={() => handleSelectResult(item)} style={{
+                    padding: '10px 14px', borderBottom: idx === searchResults.length - 1 ? 'none' : '1px solid #F3F4F6',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <div style={{
+                      width: '28px', height: '28px', borderRadius: '50%', background: item.avatar_color || '#8B1A1A', color: 'white',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, flexShrink: 0
+                    }}>{nameStr.charAt(0)}</div>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827', margin: 0 }}>{nameStr}</p>
+                      <p style={{ fontSize: '11px', color: '#9CA3AF', margin: 0, marginTop: '2px' }}>
+                        {item.type === 'student' ? 'طالب' : 'خادم'} • {item.code || item.role || '—'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Bell ── */}

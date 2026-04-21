@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Save, AlertCircle } from 'lucide-react';
-import { fetchDashboardStats, fetchAbsentForDate } from '../lib/database';
+import { Phone, Save, AlertCircle, Plus, X, Loader2 } from 'lucide-react';
+import { fetchDashboardStats, fetchAbsentForDate, fetchActiveAlerts, saveSystemAlert } from '../lib/database';
 import { getActiveFriday } from '../lib/attendanceCycle';
-import { alerts } from '../data/mockData';
+import { useAuth } from '../contexts/AuthContext';
 
 // ── Shared card shell style ────────────────────────────────────
 const S = {
@@ -35,11 +35,23 @@ export default function Dashboard() {
   // ── Active Friday cycle — used for attendance queries ────────
   const activeFriday = getActiveFriday();
 
+  const { profile } = useAuth();
+  const canAddAlert = ['ADMIN', 'الأمانة العامة', 'أمين خدمة'].includes(profile?.role);
+
   // ── State ────────────────────────────────────────────────────
   const [stats,      setStats]      = useState(null);   // fetchDashboardStats result
   const [absentList, setAbsentList] = useState([]);     // absent students list
+  const [systemAlerts, setSystemAlerts] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
+
+  // ── Alert Modal State ─────────────────────────────────────────
+  const [showAddAlert, setShowAddAlert] = useState(false);
+  const [alertTitle,   setAlertTitle]   = useState('');
+  const [alertText,    setAlertText]    = useState('');
+  const [alertIcon,    setAlertIcon]    = useState('⚠️');
+  const [alertDuration, setAlertDuration] = useState(7);
+  const [isSavingAlert, setIsSavingAlert] = useState(false);
 
   // ── Fetch on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -50,9 +62,10 @@ export default function Dashboard() {
       setError(null);
       try {
         // Run stats + absent list in parallel; each is independently safe
-        const [statsResult, absentResult] = await Promise.allSettled([
+        const [statsResult, absentResult, alertsResult] = await Promise.allSettled([
           fetchDashboardStats(activeFriday),
           fetchAbsentForDate(activeFriday),
+          fetchActiveAlerts(),
         ]);
 
         if (cancelled) return;
@@ -71,6 +84,12 @@ export default function Dashboard() {
           console.error('[Dashboard] absentList error →', absentResult.reason);
           setAbsentList([]);
         }
+
+        if (alertsResult.status === 'fulfilled') {
+          setSystemAlerts(alertsResult.value);
+        } else {
+          setSystemAlerts([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -88,6 +107,34 @@ export default function Dashboard() {
   const avatarStudents = stats?.avatarStudents ?? [];
 
   const pad2 = n => String(n).padStart(2, '0');
+
+  async function handleAddAlert(e) {
+    e.preventDefault();
+    if (!alertTitle.trim() || !alertText.trim()) return;
+    setIsSavingAlert(true);
+    try {
+      await saveSystemAlert({
+        title: alertTitle.trim(),
+        text: alertText.trim(),
+        type: alertIcon,
+        durationDays: Number(alertDuration),
+      });
+      setShowAddAlert(false);
+      setAlertTitle('');
+      setAlertText('');
+      setAlertIcon('⚠️');
+      setAlertDuration(7);
+      
+      // reload
+      const updated = await fetchActiveAlerts();
+      setSystemAlerts(updated);
+    } catch (err) {
+      console.error('Failed to save alert', err);
+      alert('تعذّر إضافة التنبيه. يرجى المحاولة لاحقاً.');
+    } finally {
+      setIsSavingAlert(false);
+    }
+  }
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', direction: 'rtl' }}>
@@ -332,30 +379,113 @@ export default function Dashboard() {
           borderRadius: '14px', padding: '20px',
           boxShadow: '0 4px 16px rgba(139,26,26,0.25)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '18px' }}>⚠️</span>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>⚠️</span>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
+            </div>
+            {canAddAlert && (
+              <button 
+                onClick={() => setShowAddAlert(true)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                  display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontFamily: 'Cairo, sans-serif'
+                }}>
+                <Plus size={14} /> إضافة تنبيه
+              </button>
+            )}
           </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {alerts.map(alert => (
-              <div key={alert.id} style={{
-                background: 'rgba(255,255,255,0.12)', borderRadius: '10px',
-                padding: '12px 14px', textAlign: 'right',
-                border: '1px solid rgba(255,255,255,0.1)',
+            {systemAlerts.length === 0 ? (
+              <div style={{
+                background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
+                padding: '20px', textAlign: 'center', border: '1px dashed rgba(255,255,255,0.2)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', justifyContent: 'flex-start' }}>
-                  <span style={{ fontSize: '16px' }}>{alert.icon}</span>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{alert.title}</p>
-                </div>
-                <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
-                  {alert.text}
-                </p>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>لا توجد تنبيهات حالية.</p>
               </div>
-            ))}
+            ) : (
+              systemAlerts.map(alert => (
+                <div key={alert.id} style={{
+                  background: 'rgba(255,255,255,0.12)', borderRadius: '10px',
+                  padding: '12px 14px', textAlign: 'right',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', justifyContent: 'flex-start' }}>
+                    <span style={{ fontSize: '16px' }}>{alert.alert_type || alert.icon || '⚠️'}</span>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{alert.title}</p>
+                  </div>
+                  <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
+                    {alert.description || alert.text}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
       </div>
+
+      {/* Add Alert Modal */}
+      {showAddAlert && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          fontFamily: 'Cairo, sans-serif', direction: 'rtl'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', width: '100%', maxWidth: '400px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden', animation: 'scaleUp 0.3s ease'
+          }}>
+            <div style={{ background: '#F9FAFB', padding: '16px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827', margin: 0 }}>إضافة تنبيه جديد</h3>
+              <button onClick={() => setShowAddAlert(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleAddAlert} style={{ padding: '20px' }}>
+              
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>عنوان التنبيه <span style={{color: '#DC2626'}}>*</span></label>
+                <input required value={alertTitle} onChange={e => setAlertTitle(e.target.value)} type="text" placeholder="مثال: موعد قداس الخدمة" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none' }} />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>وصف التنبيه <span style={{color: '#DC2626'}}>*</span></label>
+                <textarea required value={alertText} onChange={e => setAlertText(e.target.value)} placeholder="اكتب تفاصيل التنبيه بوضوح..." style={{ width: '100%', height: '80px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', resize: 'none' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>فترة الظهور</label>
+                  <select value={alertDuration} onChange={e => setAlertDuration(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', background: 'white' }}>
+                    <option value={1}>يوم واحد</option>
+                    <option value={3}>٣ أيام</option>
+                    <option value={7}>أسبوع</option>
+                    <option value={14}>أسبوعين</option>
+                    <option value={30}>شهر</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>الأيقونة</label>
+                  <select value={alertIcon} onChange={e => setAlertIcon(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '16px', outline: 'none', background: 'white' }}>
+                    <option value="⚠️">⚠️ تحذير</option>
+                    <option value="📅">📅 تقويم</option>
+                    <option value="📋">📋 إعلان</option>
+                    <option value="🎉">🎉 مناسبة</option>
+                    <option value="⏰">⏰ تذكير</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" disabled={isSavingAlert} style={{ width: '100%', padding: '12px', background: '#8B1A1A', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, fontFamily: 'Cairo', cursor: isSavingAlert ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                {isSavingAlert ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> جاري الحفظ...</> : 'نشر التنبيه'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
