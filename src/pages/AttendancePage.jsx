@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
-import { fetchStudents, fetchAttendanceForDate, saveAttendance } from '../lib/database';
+import { fetchStudents, fetchAttendanceForDate, saveAttendance, fetchLastAttendancesBeforeDate } from '../lib/database';
 import {
   getActiveFriday,
   getPreviousFriday,
@@ -33,6 +33,7 @@ export default function AttendancePage() {
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [attendance, setAttendance] = useState({});
+  const [lastAttendances, setLastAttendances] = useState({});
   const [gender,     setGender]     = useState('all');
   const [saved,      setSaved]      = useState(false);
   const [page,       setPage]       = useState(1);
@@ -50,10 +51,16 @@ export default function AttendancePage() {
     if (!studentsLoaded) return;
     setLoading(true);
     setSaved(false);
-    fetchAttendanceForDate(selectedFriday)
-      .then(records => setAttendance(records))
-      .catch(err => console.error('Attendance load error:', err))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetchAttendanceForDate(selectedFriday),
+      fetchLastAttendancesBeforeDate(selectedFriday)
+    ])
+    .then(([records, lastMap]) => {
+      setAttendance(records);
+      setLastAttendances(lastMap);
+    })
+    .catch(err => console.error('Attendance load error:', err))
+    .finally(() => setLoading(false));
   }, [selectedFriday, studentsLoaded]);
 
   // ── Navigation handlers ────────────────────────────────────
@@ -363,7 +370,9 @@ export default function AttendancePage() {
                       <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{s.grade}</p>
                     </div>
                   </div>
-                  <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>{s.last_attendance || s.lastAttendance}</p>
+                  <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>
+                    {lastAttendances[s.id] || 'لا يوجد (أول حضور)'}
+                  </p>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     {STATUS.map(opt => (
                       <button

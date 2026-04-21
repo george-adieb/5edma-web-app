@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Save, AlertCircle, Plus, X, Loader2 } from 'lucide-react';
-import { fetchDashboardStats, fetchAbsentForDate, fetchActiveAlerts, saveSystemAlert } from '../lib/database';
+import { fetchDashboardStats, fetchAbsentForDate, fetchActiveAlerts, saveSystemAlert, fetchUpcomingBirthdays } from '../lib/database';
 import { getActiveFriday } from '../lib/attendanceCycle';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [stats,      setStats]      = useState(null);   // fetchDashboardStats result
   const [absentList, setAbsentList] = useState([]);     // absent students list
   const [systemAlerts, setSystemAlerts] = useState([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
 
@@ -62,10 +63,11 @@ export default function Dashboard() {
       setError(null);
       try {
         // Run stats + absent list in parallel; each is independently safe
-        const [statsResult, absentResult, alertsResult] = await Promise.allSettled([
+        const [statsResult, absentResult, alertsResult, birthdaysResult] = await Promise.allSettled([
           fetchDashboardStats(activeFriday),
           fetchAbsentForDate(activeFriday),
           fetchActiveAlerts(),
+          fetchUpcomingBirthdays(),
         ]);
 
         if (cancelled) return;
@@ -89,6 +91,12 @@ export default function Dashboard() {
           setSystemAlerts(alertsResult.value);
         } else {
           setSystemAlerts([]);
+        }
+
+        if (birthdaysResult.status === 'fulfilled') {
+          setUpcomingBirthdays(birthdaysResult.value);
+        } else {
+          setUpcomingBirthdays([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -398,7 +406,59 @@ export default function Dashboard() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {systemAlerts.length === 0 ? (
+            {upcomingBirthdays.length > 0 && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.12)', borderRadius: '10px',
+                padding: '12px 14px', textAlign: 'right',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                animation: 'fadeIn 0.4s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', justifyContent: 'flex-start' }}>
+                  <span style={{ fontSize: '18px' }}>🎂</span>
+                  <p style={{ fontSize: '13.5px', fontWeight: 800, color: 'white' }}>أعياد ميلاد قريبة</p>
+                  <span style={{
+                    marginRight: 'auto', background: 'rgba(255,255,255,0.2)', color: 'white',
+                    fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '12px'
+                  }}>
+                    {upcomingBirthdays.length} مخدومين
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: '8px' }}>
+                  عندك {upcomingBirthdays.length} مخدومين عيد ميلادهم الأسبوع ده – حضّر للاحتفال الجمعة 🎉
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {upcomingBirthdays.slice(0, 5).map(b => (
+                    <div key={b.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      background: 'rgba(0,0,0,0.15)', padding: '6px 10px', borderRadius: '6px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{
+                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                          background: b.avatar_color || '#8B1A1A', color: 'white',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '9px', fontWeight: 700
+                        }}>
+                          {b.avatar}
+                        </div>
+                        <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{b.name}</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#FCD34D', fontWeight: 700 }}>
+                        {b.daysUntil === 0 ? 'اليوم!' : b.daysUntil === 1 ? 'غداً!' : `بعد ${b.daysUntil} أيام`} ({b.formattedBday})
+                      </div>
+                    </div>
+                  ))}
+                  {upcomingBirthdays.length > 5 && (
+                    <div style={{ textAlign: 'center', fontSize: '11px', color: 'white', marginTop: '4px', opacity: 0.8 }}>
+                      و {upcomingBirthdays.length - 5} آخرين...
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {systemAlerts.length === 0 && upcomingBirthdays.length === 0 ? (
               <div style={{
                 background: 'rgba(255,255,255,0.1)', borderRadius: '10px',
                 padding: '20px', textAlign: 'center', border: '1px dashed rgba(255,255,255,0.2)',

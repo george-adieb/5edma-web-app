@@ -195,6 +195,59 @@ export async function fetchStudent(id) {
   return data;
 }
 
+/** Fetch students who have upcoming birthdays in the next 7 days */
+export async function fetchUpcomingBirthdays() {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, name, grade, birth_date, avatar, avatar_color')
+    .not('birth_date', 'is', null);
+    
+  if (error) {
+    console.warn('[fetchUpcomingBirthdays] error:', error);
+    return [];
+  }
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const upcoming = [];
+
+  for (const student of data || []) {
+    if (!student.birth_date) continue;
+    if (!student.birth_date.includes('-')) continue;
+
+    const [y, m, d] = student.birth_date.split('-');
+    if (!m || !d) continue;
+
+    const bMonth = parseInt(m, 10);
+    const bDay = parseInt(d, 10);
+
+    let nextBday = new Date(currentYear, bMonth - 1, bDay);
+    
+    today.setHours(0, 0, 0, 0);
+    nextBday.setHours(0, 0, 0, 0);
+
+    let diffTime = nextBday - today;
+    
+    if (diffTime < 0) {
+      nextBday = new Date(currentYear + 1, bMonth - 1, bDay);
+      nextBday.setHours(0, 0, 0, 0);
+      diffTime = nextBday - today;
+    }
+
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays >= 0 && diffDays <= 7) {
+      upcoming.push({
+        ...student,
+        daysUntil: diffDays,
+        formattedBday: `${bDay}/${bMonth}`
+      });
+    }
+  }
+
+  return upcoming.sort((a,b) => a.daysUntil - b.daysUntil);
+}
+
 /** Insert a new student */
 export async function insertStudent(studentData) {
   // Auto-generate a STD code
@@ -351,6 +404,59 @@ export async function fetchAttendanceForDate(date = todayISO()) {
   if (error) throw error;
   // Return as { [student_id]: status }
   return Object.fromEntries(data.map(r => [r.student_id, r.status]));
+}
+
+/** 
+ * Fetch the latest previous attendance date (status='حاضر') for each student, strictly before the targetDate.
+ * Used to populate the "آخر حضور" column in the Attendance page dynamically.
+ */
+export async function fetchLastAttendancesBeforeDate(targetDate) {
+  // We fetch all records with status='حاضر' to strictly filter and group them client-side.
+  // This explicitly prevents any DB timezone `.lt` parsing bugs from returning future dates.
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('student_id, attendance_date')
+    .eq('status', 'حاضر');
+
+  if (error) {
+    console.error('[fetchLastAttendancesBeforeDate] error:', error);
+    return {};
+  }
+
+  const grouped = {};
+  for (const r of data || []) {
+    const dateStr = r.attendance_date ? r.attendance_date.split('T')[0] : null;
+    if (!dateStr) continue;
+    
+    // 1. Ensure comparison only considers attendance_date strictly LESS THAN selected_friday
+    //    and automatically excludes targetDate itself or any future dates.
+    if (dateStr < targetDate) {
+      if (!grouped[r.student_id]) grouped[r.student_id] = [];
+      grouped[r.student_id].push(dateStr);
+    }
+  }
+
+  const map = {};
+  for (const [studentId, dates] of Object.entries(grouped)) {
+    // 2. Sort descending to grab the absolute max previous date
+    dates.sort((a, b) => b.localeCompare(a));
+    const maxDateStr = dates[0];
+    
+    if (maxDateStr.includes('-')) {
+      const [y, m, d] = maxDateStr.split('-');
+      if (y && m && d) {
+        // Build isolated local time ensuring no rolling offsets
+        const localDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+        map[studentId] = localDate.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+      } else {
+        map[studentId] = maxDateStr;
+      }
+    } else {
+      map[studentId] = maxDateStr;
+    }
+  }
+  
+  return map;
 }
 
 /** Fetch full attendance history for a single student */
@@ -618,6 +724,15 @@ export async function fetchAbsentToday() {
 
 function formatDate(isoDate) {
   if (!isoDate) return '';
+  
+  if (isoDate.includes('-')) {
+    const [y, m, d] = isoDate.split('T')[0].split('-');
+    if (y && m && d) {
+      const local = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      return local.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+  }
+
   const d = new Date(isoDate);
   return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
 }
