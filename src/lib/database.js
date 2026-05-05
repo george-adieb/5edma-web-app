@@ -8,14 +8,24 @@ function todayISO() {
   return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
+/**
+ * Apply grade/gender scoping to a Supabase query for SERVANT role.
+ * For any other role (or if profile is null) the query is returned unchanged.
+ */
+function applyServantScope(query, profile) {
+  if (profile?.role === 'SERVANT') {
+    query = query.eq('grade', profile.assigned_grade).eq('gender', profile.assigned_gender);
+  }
+  return query;
+}
+
 // ─── STUDENTS ─────────────────────────────────────────────────────────────────
 
-/** Fetch all students ordered by name */
-export async function fetchStudents() {
-  const { data, error } = await supabase
-    .from('students')
-    .select('*')
-    .order('name');
+/** Fetch all students ordered by name, with role-based filtering */
+export async function fetchStudents(profile = null) {
+  let query = supabase.from('students').select('*');
+  query = applyServantScope(query, profile);
+  const { data, error } = await query.order('name');
   if (error) throw error;
   return data;
 }
@@ -59,15 +69,33 @@ export async function fetchStudentsNeedingFollowUp() {
  * records, so richer streak rules (e.g. "skip معتذر without breaking streak")
  * can be added to the loop below without touching the query.
  */
-export async function fetchFollowUpCandidates(recentFridays) {
+export async function fetchFollowUpCandidates(recentFridays, profile = null) {
   if (!recentFridays || recentFridays.length === 0) return [];
+
+  // When scoped to a servant, first get the IDs of students in their group
+  // so we only process attendance records for those students.
+  let scopedStudentIds = null;
+  if (profile?.role === 'SERVANT') {
+    const { data: scopedStudents, error: scopeErr } = await supabase
+      .from('students')
+      .select('id')
+      .eq('grade', profile.assigned_grade)
+      .eq('gender', profile.assigned_gender);
+    if (scopeErr) throw scopeErr;
+    scopedStudentIds = (scopedStudents || []).map(s => s.id);
+    if (scopedStudentIds.length === 0) return [];
+  }
 
   // Fetch all attendance records for the given Fridays (all statuses so we
   // can detect streak breaks caused by a حاضر or معتذر record).
-  const { data: records, error } = await supabase
+  let recordsQuery = supabase
     .from('attendance_records')
     .select('student_id, attendance_date, status')
     .in('attendance_date', recentFridays);
+  if (scopedStudentIds) {
+    recordsQuery = recordsQuery.in('student_id', scopedStudentIds);
+  }
+  const { data: records, error } = await recordsQuery;
   if (error) throw error;
   if (!records || records.length === 0) return [];
 
@@ -196,12 +224,14 @@ export async function fetchStudent(id) {
 }
 
 /** Fetch students who have upcoming birthdays in the next 7 days */
-export async function fetchUpcomingBirthdays() {
-  const { data, error } = await supabase
+export async function fetchUpcomingBirthdays(profile = null) {
+  let query = supabase
     .from('students')
     .select('id, name, grade, birth_date, avatar, avatar_color')
     .not('birth_date', 'is', null);
-    
+  query = applyServantScope(query, profile);
+
+  const { data, error } = await query;
   if (error) {
     console.warn('[fetchUpcomingBirthdays] error:', error);
     return [];
@@ -340,6 +370,20 @@ export async function updateStudent(id, studentData) {
 
 export function gradeLabel(gradeId) {
   return GRADE_LABEL_MAP[gradeId] || gradeId;
+}
+
+/** Delete a student and related records */
+export async function deleteStudent(id) {
+  // Delete related records first to avoid foreign key constraints
+  await supabase.from('attendance_records').delete().eq('student_id', id);
+  await supabase.from('follow_up_logs').delete().eq('student_id', id);
+  await supabase.from('follow_ups').delete().eq('student_id', id);
+
+  const { error } = await supabase.from('students').delete().eq('id', id);
+  if (error) {
+    console.error('[deleteStudent] error →', error);
+    throw error;
+  }
 }
 
 // ─── SERVANTS ─────────────────────────────────────────────────────────────────
@@ -526,7 +570,20 @@ export async function upsertFollowUp(followUpData) {
 // ─── FOLLOW-UP LOGS ───────────────────────────────────────────────────────────
 
 /** Fetch follow-up log entries. Pass studentId to scope to one student. */
-export async function fetchFollowUpLogs(limit = 10, studentId = null) {
+export async function fetchFollowUpLogs(limit = 10, studentId = null, profile = null) {
+  // Scope to SERVANT group if applicable
+  let scopedStudentIds = null;
+  if (profile?.role === 'SERVANT' && !studentId) {
+    const { data: scopedStudents, error: scopeErr } = await supabase
+      .from('students')
+      .select('id')
+      .eq('grade', profile.assigned_grade)
+      .eq('gender', profile.assigned_gender);
+    if (scopeErr) throw scopeErr;
+    scopedStudentIds = (scopedStudents || []).map(s => s.id);
+    if (scopedStudentIds.length === 0) return []; // No students -> no logs
+  }
+
   let query = supabase
     .from('follow_up_logs')
     .select(`
@@ -537,7 +594,11 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (studentId) query = query.eq('student_id', studentId);
+  if (studentId) {
+    query = query.eq('student_id', studentId);
+  } else if (scopedStudentIds) {
+    query = query.in('student_id', scopedStudentIds);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
@@ -617,9 +678,9 @@ export async function updateFollowUpLog(logId, { type, notes }) {
  * @param {string[]} recentFridays  ISO Friday dates (from getRecentFridays()).
  * @returns {Promise<number>}
  */
-export async function fetchFollowUpCount(recentFridays) {
+export async function fetchFollowUpCount(recentFridays, profile = null) {
   // Use the updated candidate logic to reflect the correct count of active unresolved cases natively
-  const candidates = await fetchFollowUpCandidates(recentFridays);
+  const candidates = await fetchFollowUpCandidates(recentFridays, profile);
   return candidates.length;
 }
 
@@ -644,20 +705,48 @@ export async function fetchFollowUpCount(recentFridays) {
  * Uses Promise.allSettled so a single failing query never crashes the page.
  * Each field falls back to a safe zero/empty value on error.
  */
-export async function fetchDashboardStats(fridayDate) {
+export async function fetchDashboardStats(fridayDate, profile = null) {
   // Shared Friday window — same as the follow-up page uses
   const recentFridays = getRecentFridays(8);
 
+  // Build scoped student-count query
+  let studentCountQuery = supabase.from('students').select('*', { count: 'exact', head: true });
+  studentCountQuery = applyServantScope(studentCountQuery, profile);
+
+  // For scoped attendance we need the student IDs first (only for SERVANT)
+  let scopedStudentIds = null;
+  if (profile?.role === 'SERVANT') {
+    const { data: scopedStudents } = await supabase
+      .from('students')
+      .select('id')
+      .eq('grade', profile.assigned_grade)
+      .eq('gender', profile.assigned_gender);
+    scopedStudentIds = (scopedStudents || []).map(s => s.id);
+  }
+
+  // Build scoped attendance query
+  let attendanceQuery = supabase
+    .from('attendance_records')
+    .select('status')
+    .eq('attendance_date', fridayDate);
+  if (scopedStudentIds) {
+    attendanceQuery = attendanceQuery.in('student_id', scopedStudentIds);
+  }
+
+  // Build scoped avatar row query
+  let avatarQuery = supabase.from('students').select('id, avatar, avatar_color').limit(6);
+  avatarQuery = applyServantScope(avatarQuery, profile);
+
   const results = await Promise.allSettled([
-    // 0 — total students
-    supabase.from('students').select('*', { count: 'exact', head: true }),
-    // 1 — attendance records for the active Friday cycle
-    supabase.from('attendance_records').select('status').eq('attendance_date', fridayDate),
-    // 2 — follow-up candidate count (attendance-derived, same logic as follow-up page)
-    fetchFollowUpCount(recentFridays),
-    // 3 — small set of students for the avatar row decoration
-    supabase.from('students').select('id, avatar, avatar_color').limit(6),
-    // 4 — total servants (future: إجمالي الخدام card)
+    // 0 — total students (scoped)
+    studentCountQuery,
+    // 1 — attendance records for the active Friday cycle (scoped)
+    attendanceQuery,
+    // 2 — follow-up candidate count (scoped)
+    fetchFollowUpCount(recentFridays, profile),
+    // 3 — small set of students for the avatar row (scoped)
+    avatarQuery,
+    // 4 — total servants (not scoped — servants are global)
     supabase.from('servants').select('*', { count: 'exact', head: true }),
   ]);
 
@@ -696,7 +785,7 @@ export async function fetchDashboardStats(fridayDate) {
  *
  * @param {string} date  ISO date — defaults to today for backward compat.
  */
-export async function fetchAbsentForDate(date = todayISO()) {
+export async function fetchAbsentForDate(date = todayISO(), profile = null) {
   const { data: absences, error: e1 } = await supabase
     .from('attendance_records')
     .select('student_id')
@@ -706,11 +795,14 @@ export async function fetchAbsentForDate(date = todayISO()) {
   if (!absences || absences.length === 0) return [];
 
   const ids = absences.map(r => r.student_id);
-  const { data: studs, error: e2 } = await supabase
+  let studsQuery = supabase
     .from('students')
     .select('id, name, grade, avatar, avatar_color, parent_phone')
-    .in('id', ids)
-    .limit(10); // cap dashboard list
+    .in('id', ids);
+  // For SERVANT: further restrict to only their assigned group
+  studsQuery = applyServantScope(studsQuery, profile);
+  studsQuery = studsQuery.limit(10);
+  const { data: studs, error: e2 } = await studsQuery;
   if (e2) throw e2;
   return studs || [];
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { fetchStudents, fetchAttendanceForDate, saveAttendance, fetchLastAttendancesBeforeDate } from '../lib/database';
 import {
   getActiveFriday,
@@ -39,12 +40,15 @@ export default function AttendancePage() {
   const [page,       setPage]       = useState(1);
   const PER = 10;
 
+  const { profile } = useAuth();
+  
   // ── Load students once ─────────────────────────────────────
   useEffect(() => {
-    fetchStudents()
+    if (!profile) return;
+    fetchStudents(profile)
       .then(studs => { setStudents(studs); setStudentsLoaded(true); })
       .catch(err => console.error('Students load error:', err));
-  }, []);
+  }, [profile]);
 
   // ── Load attendance whenever selected Friday changes ───────
   useEffect(() => {
@@ -95,11 +99,17 @@ export default function AttendancePage() {
   const visible    = filtered.slice((page - 1) * PER, page * PER);
 
   // ── Stats ──────────────────────────────────────────────────
-  const present = Object.values(attendance).filter(v => v === 'حاضر').length;
-  const absent  = Object.values(attendance).filter(v => v === 'غائب').length;
-  const excused = Object.values(attendance).filter(v => v === 'معتذر').length;
+  // Build a Set of IDs from the scoped students list so all counters
+  // only reflect the servant's assigned group (not all records in the DB).
+  const scopedIds    = new Set(students.map(s => String(s.id)));
+  const scopedAtt    = Object.fromEntries(
+    Object.entries(attendance).filter(([id]) => scopedIds.has(String(id)))
+  );
+  const present = Object.values(scopedAtt).filter(v => v === 'حاضر').length;
+  const absent  = Object.values(scopedAtt).filter(v => v === 'غائب').length;
+  const excused = Object.values(scopedAtt).filter(v => v === 'معتذر').length;
   const rate    = students.length ? Math.round((present / students.length) * 100) : 0;
-  const marked  = Object.values(attendance).filter(Boolean).length;
+  const marked  = Object.values(scopedAtt).filter(Boolean).length;
 
   // ── Attendance marking ─────────────────────────────────────
   function mark(id, status) {
@@ -111,7 +121,8 @@ export default function AttendancePage() {
   async function save() {
     setSaving(true);
     try {
-      await saveAttendance(attendance, selectedFriday);
+      // Only save records for this servant's assigned students (scopedAtt)
+      await saveAttendance(scopedAtt, selectedFriday);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

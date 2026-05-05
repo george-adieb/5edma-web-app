@@ -2,6 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
   { to: '/',          icon: LayoutDashboard, label: 'لوحة التحكم' },
@@ -15,6 +16,7 @@ const navItems = [
 function ContextualAddBtn({ onClose }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { profile } = useAuth();
 
   let targetPath = '';
   let label = '';
@@ -22,7 +24,7 @@ function ContextualAddBtn({ onClose }) {
   if (location.pathname.startsWith('/students')) {
     targetPath = '/students/new';
     label = 'إضافة مخدوم جديد';
-  } else if (location.pathname.startsWith('/servants')) {
+  } else if (location.pathname.startsWith('/servants') && profile?.role !== 'SERVANT') {
     targetPath = '/servants/new';
     label = 'إضافة خادم جديد';
   } else {
@@ -51,6 +53,17 @@ function ContextualAddBtn({ onClose }) {
 }
 
 export default function Sidebar({ onClose }) {
+  const { profile } = useAuth();
+
+  const filteredNavItems = navItems.filter(item => {
+    if (profile?.role === 'SERVANT') {
+      if (item.to === '/servants' || item.to === '/settings') {
+        return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <aside style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Brand */}
@@ -104,7 +117,7 @@ export default function Sidebar({ onClose }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {filteredNavItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}

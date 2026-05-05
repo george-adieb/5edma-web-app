@@ -56,6 +56,7 @@ export default function Dashboard() {
 
   // ── Fetch on mount ───────────────────────────────────────────
   useEffect(() => {
+    if (!profile) return; // wait for auth profile to resolve
     let cancelled = false;
 
     async function load() {
@@ -64,10 +65,10 @@ export default function Dashboard() {
       try {
         // Run stats + absent list in parallel; each is independently safe
         const [statsResult, absentResult, alertsResult, birthdaysResult] = await Promise.allSettled([
-          fetchDashboardStats(activeFriday),
-          fetchAbsentForDate(activeFriday),
+          fetchDashboardStats(activeFriday, profile),
+          fetchAbsentForDate(activeFriday, profile),
           fetchActiveAlerts(),
-          fetchUpcomingBirthdays(),
+          fetchUpcomingBirthdays(profile),
         ]);
 
         if (cancelled) return;
@@ -105,7 +106,7 @@ export default function Dashboard() {
 
     load();
     return () => { cancelled = true; };
-  }, [activeFriday]);
+  }, [activeFriday, profile]);
 
   // ── Safe accessors with fallback ─────────────────────────────
   const totalStudents  = stats?.totalStudents  ?? 0;

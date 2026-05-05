@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MoreVertical, Loader2 } from 'lucide-react';
-import { fetchStudents } from '../lib/database';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchStudents, deleteStudent } from '../lib/database';
 import RowActionsMenu from '../components/RowActionsMenu';
 import { GRADE_LABEL_MAP } from '../data/constants';
 import StudentFilterBar, { useStudentFilters } from '../components/StudentFilterBar';
@@ -28,17 +29,30 @@ export default function StudentsPage() {
 
   const { search, setSearch, stage, setStage, year, setYear, stageConfig, baseFiltered, clearFilters } = useStudentFilters(students);
 
+  const { profile } = useAuth();
+  
   useEffect(() => {
+    if (!profile) return;
     setLoading(true);
-    fetchStudents()
+    fetchStudents(profile)
       .then(data => setStudents(data))
       .catch(err  => { console.error(err); setError('تعذّر تحميل بيانات المخدومين'); })
       .finally(() => setLoading(false));
-  }, []);
+  }, [profile]);
 
   const filtered   = baseFiltered.filter(s => status === 'all' || s.status === status);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
   const visible    = filtered.slice((page - 1) * PER, page * PER);
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteStudent(id);
+      setStudents(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('[StudentsPage] delete error:', err);
+      alert('حدث خطأ أثناء الحذف. يرجى المحاولة مرة أخرى.');
+    }
+  };
 
   const pillBtn = (active, onClick, label) => (
     <button onClick={onClick} style={{
@@ -67,7 +81,7 @@ export default function StudentsPage() {
           <p style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</p>
           <p style={{ fontSize: '14px', color: '#DC2626', fontWeight: 700 }}>{error}</p>
           <button
-            onClick={() => { setError(null); setLoading(true); fetchStudents().then(setStudents).catch(e => setError(e.message)).finally(() => setLoading(false)); }}
+            onClick={() => { setError(null); setLoading(true); fetchStudents(profile).then(setStudents).catch(e => setError(e.message)).finally(() => setLoading(false)); }}
             style={{ marginTop: '12px', padding: '10px 20px', borderRadius: '8px', background: '#8B1A1A', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontWeight: 700, minHeight: '44px' }}
           >إعادة المحاولة</button>
         </div>
@@ -178,7 +192,7 @@ export default function StudentsPage() {
                     <div onClick={e => e.stopPropagation()}>
                       <RowActionsMenu
                         onEdit={() => navigate(`/students/edit/${s.id}`)}
-                        onDelete={() => console.log('Delete:', s.id)}
+                        onDelete={() => handleDelete(s.id)}
                       />
                     </div>
                   </div>
@@ -228,7 +242,7 @@ export default function StudentsPage() {
                   <div style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
                     <RowActionsMenu
                       onEdit={() => navigate(`/students/edit/${s.id}`)}
-                      onDelete={() => console.log('Delete:', s.id)}
+                      onDelete={() => handleDelete(s.id)}
                     />
                   </div>
                 </div>

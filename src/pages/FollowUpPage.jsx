@@ -8,6 +8,7 @@ import {
   updateStudentStatus,
 } from '../lib/database';
 import { getRecentFridays } from '../lib/attendanceCycle';
+import { useAuth } from '../contexts/AuthContext';
 
 /* ─── Constants ──────────────────────────────────────────────── */
 
@@ -73,6 +74,7 @@ function Skel({ w = '100%', h = '14px', radius = '6px' }) {
 /* ─── Page ───────────────────────────────────────────────────── */
 export default function FollowUpPage() {
   const { globalSearch } = useOutletContext() || { globalSearch: '' };
+  const { profile } = useAuth();
 
   // ── Data state ─────────────────────────────────────────────
   const [followUpStudents, setFollowUpStudents] = useState([]);
@@ -93,8 +95,8 @@ export default function FollowUpPage() {
   async function loadData() {
     const recentFridays = getRecentFridays(LOOKBACK_WEEKS);
     const [studentsRes, logsRes] = await Promise.allSettled([
-      fetchFollowUpCandidates(recentFridays),
-      fetchFollowUpLogs(5),
+      fetchFollowUpCandidates(recentFridays, profile),
+      fetchFollowUpLogs(5, null, profile),
     ]);
 
     if (studentsRes.status === 'fulfilled') {
@@ -118,11 +120,12 @@ export default function FollowUpPage() {
   }
 
   useEffect(() => {
+    if (!profile) return; // wait for auth profile to resolve
     let cancelled = false;
     setLoading(true);
     loadData().finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [profile]);
 
   // ── No global lastContactMap needed ──
   // The server-side filter now perfectly surfaces `f.latestLog` right on the student!
