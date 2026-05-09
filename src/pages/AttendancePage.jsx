@@ -38,7 +38,7 @@ export default function AttendancePage() {
   const [gender,     setGender]     = useState('all');
   const [saved,      setSaved]      = useState(false);
   const [page,       setPage]       = useState(1);
-  const PER = 10;
+  const [perPage,    setPerPage]    = useState(10);
 
   const { profile } = useAuth();
   
@@ -95,8 +95,9 @@ export default function AttendancePage() {
   const { search, setSearch, stage, setStage, year, setYear, stageConfig, baseFiltered, clearFilters } = useStudentFilters(students);
 
   const filtered   = baseFiltered.filter(s => gender === 'all' || s.gender === gender);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
-  const visible    = filtered.slice((page - 1) * PER, page * PER);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const startIdx   = (page - 1) * perPage;
+  const visible    = filtered.slice(startIdx, startIdx + perPage);
 
   // ── Stats ──────────────────────────────────────────────────
   // Build a Set of IDs from the scoped students list so all counters
@@ -429,9 +430,27 @@ export default function AttendancePage() {
                 style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #E5E7EB', background: 'white', cursor: page === totalPages ? 'not-allowed' : 'pointer', color: page === totalPages ? '#D1D5DB' : '#6B7280', display: 'flex', alignItems: 'center', minHeight: '36px', transition: 'all 0.15s' }}>
                 <ChevronLeft size={16} />
               </button>
+
+              {/* Rows-per-page dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '6px', borderRight: '1px solid #E5E7EB', paddingRight: '10px' }}>
+                <label style={{ fontSize: '11px', color: '#9CA3AF', fontFamily: 'Cairo, sans-serif', whiteSpace: 'nowrap' }}>صفوف/صفحة</label>
+                <select
+                  value={perPage}
+                  onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}
+                  style={{
+                    padding: '4px 6px', borderRadius: '6px', border: '1px solid #E5E7EB',
+                    fontSize: '12px', fontFamily: 'Cairo, sans-serif', fontWeight: 700,
+                    color: '#374151', background: 'white', cursor: 'pointer', minHeight: '30px',
+                  }}
+                >
+                  {[5, 10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
             </div>
 
-            <p className="mob-hide" style={{ fontSize: '12px', color: '#9CA3AF' }}>{filtered.length} مخدوم من أصل {students.length}</p>
+            <p className="mob-hide" style={{ fontSize: '12px', color: '#9CA3AF' }}>
+              {filtered.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + perPage, filtered.length)} من {filtered.length} | إجمالي {students.length}
+            </p>
 
             {/* Save button */}
             {saved ? (

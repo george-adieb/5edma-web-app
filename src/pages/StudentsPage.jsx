@@ -25,7 +25,7 @@ export default function StudentsPage() {
   const [error,    setError]    = useState(null);
   const [status,   setStatus]   = useState('all');
   const [page,     setPage]     = useState(1);
-  const PER = 8;
+  const [perPage,  setPerPage]  = useState(10);
 
   const { search, setSearch, stage, setStage, year, setYear, stageConfig, baseFiltered, clearFilters } = useStudentFilters(students);
 
@@ -41,8 +41,9 @@ export default function StudentsPage() {
   }, [profile]);
 
   const filtered   = baseFiltered.filter(s => status === 'all' || s.status === status);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
-  const visible    = filtered.slice((page - 1) * PER, page * PER);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const startIdx   = (page - 1) * perPage;
+  const visible    = filtered.slice(startIdx, startIdx + perPage);
 
   const handleDelete = async (id) => {
     try {
@@ -255,7 +256,8 @@ export default function StudentsPage() {
               padding: '12px 16px', borderTop: '1px solid #F3F4F6', background: '#FAFAFA',
               direction: 'rtl', flexWrap: 'wrap', gap: '8px',
             }}>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {/* Page buttons */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(n => (
                   <button key={n} onClick={() => setPage(n)} style={{
                     width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer',
@@ -266,9 +268,27 @@ export default function StudentsPage() {
                   }}>{n}</button>
                 ))}
                 {totalPages > 5 && <span style={{ fontSize: '12px', color: '#9CA3AF', padding: '0 4px' }}>...</span>}
+
+                {/* Rows-per-page dropdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px', borderRight: '1px solid #E5E7EB', paddingRight: '12px' }}>
+                  <label style={{ fontSize: '11px', color: '#9CA3AF', fontFamily: 'Cairo, sans-serif', whiteSpace: 'nowrap' }}>صفوف/صفحة</label>
+                  <select
+                    value={perPage}
+                    onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}
+                    style={{
+                      padding: '4px 8px', borderRadius: '6px', border: '1px solid #E5E7EB',
+                      fontSize: '12px', fontFamily: 'Cairo, sans-serif', fontWeight: 700,
+                      color: '#374151', background: 'white', cursor: 'pointer', minHeight: '30px',
+                    }}
+                  >
+                    {[5, 10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
               </div>
+
+              {/* Footer text */}
               <p style={{ fontSize: '12px', color: '#9CA3AF' }}>
-                عرض {visible.length} من أصل {filtered.length} مخدوم
+                عرض {filtered.length === 0 ? 0 : startIdx + 1} إلى {Math.min(startIdx + perPage, filtered.length)} من أصل {filtered.length} مخدوم
               </p>
             </div>
           </div>
