@@ -4,6 +4,7 @@ import { Phone, Save, AlertCircle, Plus, X, Loader2 } from 'lucide-react';
 import { fetchDashboardStats, fetchAbsentForDate, fetchActiveAlerts, saveSystemAlert, fetchUpcomingBirthdays } from '../lib/database';
 import { getActiveFriday } from '../lib/attendanceCycle';
 import { useAuth } from '../contexts/AuthContext';
+import { GRADES } from '../data/constants';
 
 // ── Shared card shell style ────────────────────────────────────
 const S = {
@@ -36,7 +37,7 @@ export default function Dashboard() {
   const activeFriday = getActiveFriday();
 
   const { profile } = useAuth();
-  const canAddAlert = ['ADMIN', 'الأمانة العامة', 'أمين خدمة'].includes(profile?.role);
+  const canAddAlert = ['ADMIN', 'GENERAL_SECRETARIAT', 'SERVICE_HEAD', 'SERVANT', 'الأمانة العامة', 'أمين خدمة'].includes(profile?.role);
 
   // ── State ────────────────────────────────────────────────────
   const [stats,      setStats]      = useState(null);   // fetchDashboardStats result
@@ -53,6 +54,31 @@ export default function Dashboard() {
   const [alertIcon,    setAlertIcon]    = useState('⚠️');
   const [alertDuration, setAlertDuration] = useState(7);
   const [isSavingAlert, setIsSavingAlert] = useState(false);
+  // Grade targeting: SERVANT is auto-locked; SERVICE_HEAD picks from their grades; ADMIN picks all
+  const [alertTargetGrades, setAlertTargetGrades] = useState([]);
+
+  // All grade label options (strip empty placeholder)
+  const allGradeOptions = GRADES.filter(g => g.id).map(g => g.label);
+  // Grades this SERVICE_HEAD is responsible for
+  const serviceHeadGrades = profile?.role === 'SERVICE_HEAD'
+    ? (Array.isArray(profile.assigned_grades)
+        ? profile.assigned_grades
+        : profile.assigned_grade ? [profile.assigned_grade] : [])
+    : [];
+  // Grades the current user is allowed to target
+  const targetableGrades = profile?.role === 'ADMIN'
+    ? allGradeOptions
+    : profile?.role === 'SERVICE_HEAD'
+      ? serviceHeadGrades
+      : profile?.role === 'SERVANT'
+        ? (profile.assigned_grade ? [profile.assigned_grade] : [])
+        : [];
+
+  function openAddAlertModal() {
+    // SERVANT grade is always locked — pre-populate
+    setAlertTargetGrades(profile?.role === 'SERVANT' ? targetableGrades : []);
+    setShowAddAlert(true);
+  }
 
   // ── Fetch on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -67,7 +93,7 @@ export default function Dashboard() {
         const [statsResult, absentResult, alertsResult, birthdaysResult] = await Promise.allSettled([
           fetchDashboardStats(activeFriday, profile),
           fetchAbsentForDate(activeFriday, profile),
-          fetchActiveAlerts(),
+          fetchActiveAlerts(profile),
           fetchUpcomingBirthdays(profile),
         ]);
 
@@ -122,20 +148,26 @@ export default function Dashboard() {
     if (!alertTitle.trim() || !alertText.trim()) return;
     setIsSavingAlert(true);
     try {
+      const isGlobal = profile?.role === 'ADMIN' && alertTargetGrades.length === 0;
       await saveSystemAlert({
-        title: alertTitle.trim(),
-        text: alertText.trim(),
-        type: alertIcon,
+        title:        alertTitle.trim(),
+        text:         alertText.trim(),
+        type:         alertIcon,
         durationDays: Number(alertDuration),
+        targetGrades:  alertTargetGrades.length > 0 ? alertTargetGrades : null,
+        targetGenders: null,
+        createdByRole: profile?.role || null,
+        isGlobal,
       });
       setShowAddAlert(false);
       setAlertTitle('');
       setAlertText('');
       setAlertIcon('⚠️');
       setAlertDuration(7);
-      
-      // reload
-      const updated = await fetchActiveAlerts();
+      setAlertTargetGrades([]);
+
+      // reload scoped alerts
+      const updated = await fetchActiveAlerts(profile);
       setSystemAlerts(updated);
     } catch (err) {
       console.error('Failed to save alert', err);
@@ -395,7 +427,7 @@ export default function Dashboard() {
             </div>
             {canAddAlert && (
               <button 
-                onClick={() => setShowAddAlert(true)}
+                onClick={openAddAlertModal}
                 style={{
                   background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
                   padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
@@ -497,23 +529,89 @@ export default function Dashboard() {
           fontFamily: 'Cairo, sans-serif', direction: 'rtl'
         }}>
           <div style={{
-            background: 'white', borderRadius: '16px', width: '100%', maxWidth: '400px',
+            background: 'white', borderRadius: '16px', width: '100%', maxWidth: '420px',
             boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden', animation: 'scaleUp 0.3s ease'
           }}>
             <div style={{ background: '#F9FAFB', padding: '16px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827', margin: 0 }}>إضافة تنبيه جديد</h3>
-              <button onClick={() => setShowAddAlert(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18} /></button>
+              <button onClick={() => { setShowAddAlert(false); setAlertTargetGrades([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18} /></button>
             </div>
-            <form onSubmit={handleAddAlert} style={{ padding: '20px' }}>
-              
+            <form onSubmit={handleAddAlert} style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
+
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>عنوان التنبيه <span style={{color: '#DC2626'}}>*</span></label>
-                <input required value={alertTitle} onChange={e => setAlertTitle(e.target.value)} type="text" placeholder="مثال: موعد قداس الخدمة" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none' }} />
+                <input required value={alertTitle} onChange={e => setAlertTitle(e.target.value)} type="text" placeholder="مثال: موعد قداس الخدمة" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>وصف التنبيه <span style={{color: '#DC2626'}}>*</span></label>
-                <textarea required value={alertText} onChange={e => setAlertText(e.target.value)} placeholder="اكتب تفاصيل التنبيه بوضوح..." style={{ width: '100%', height: '80px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', resize: 'none' }} />
+                <textarea required value={alertText} onChange={e => setAlertText(e.target.value)} placeholder="اكتب تفاصيل التنبيه بوضوح..." style={{ width: '100%', height: '80px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* ── Grade targeting ───────────────────────────────── */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  المراحل المستهدفة
+                  {profile?.role === 'SERVANT' && (
+                    <span style={{ marginRight: '6px', fontSize: '11px', color: '#6B7280', fontWeight: 400 }}>(محدد تلقائياً)</span>
+                  )}
+                  {profile?.role === 'ADMIN' && alertTargetGrades.length === 0 && (
+                    <span style={{ marginRight: '6px', fontSize: '11px', color: '#D97706', fontWeight: 400 }}>(سيظهر لجميع المراحل)</span>
+                  )}
+                </label>
+
+                {/* SERVANT — locked display */}
+                {profile?.role === 'SERVANT' && (
+                  <div style={{
+                    padding: '10px 12px', borderRadius: '8px', background: '#F3F4F6',
+                    border: '1px solid #D1D5DB', fontSize: '13px', color: '#374151',
+                  }}>
+                    {targetableGrades[0] || '—'}
+                  </div>
+                )}
+
+                {/* SERVICE_HEAD or ADMIN — multi-select checkboxes */}
+                {(profile?.role === 'SERVICE_HEAD' || profile?.role === 'ADMIN') && (
+                  <div style={{
+                    border: '1px solid #D1D5DB', borderRadius: '8px',
+                    maxHeight: '150px', overflowY: 'auto',
+                  }}>
+                    {(profile?.role === 'ADMIN' ? allGradeOptions : serviceHeadGrades).map(gradeLabel => {
+                      const checked = alertTargetGrades.includes(gradeLabel);
+                      return (
+                        <label key={gradeLabel} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: '7px 12px', cursor: 'pointer',
+                          background: checked ? '#FFF7F7' : 'transparent',
+                          fontSize: '13px', color: '#374151',
+                          borderBottom: '1px solid #F9FAFB',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setAlertTargetGrades(prev =>
+                                prev.includes(gradeLabel)
+                                  ? prev.filter(g => g !== gradeLabel)
+                                  : [...prev, gradeLabel]
+                              );
+                            }}
+                            style={{ accentColor: '#8B1A1A' }}
+                          />
+                          {gradeLabel}
+                        </label>
+                      );
+                    })}
+                    {profile?.role === 'ADMIN' && (
+                      <div style={{ padding: '6px 12px', display: 'flex', gap: '8px', borderTop: '1px solid #F3F4F6' }}>
+                        <button type="button" onClick={() => setAlertTargetGrades([...allGradeOptions])}
+                          style={{ fontSize: '11px', color: '#8B1A1A', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cairo', fontWeight: 700 }}>تحديد الكل</button>
+                        <button type="button" onClick={() => setAlertTargetGrades([])}
+                          style={{ fontSize: '11px', color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cairo', fontWeight: 700 }}>إلغاء التحديد (عام)</button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>

@@ -843,9 +843,24 @@ function timeAgo(isoString) {
 
 // ─── SYSTEM ALERTS ────────────────────────────────────────────────────────────
 
-/** Fetch currently active alerts based on start and end dates */
-export async function fetchActiveAlerts() {
+/**
+ * Fetch currently active alerts, scoped by the logged-in user's role.
+ *
+ * Visibility rules:
+ *   ADMIN            → all active alerts
+ *   SERVICE_HEAD     → alerts where target_grades overlaps profile.assigned_grades
+ *                      OR is_global = true
+ *   SERVANT          → alerts where target_grades contains profile.assigned_grade
+ *                      AND (target_genders is null OR contains profile.assigned_gender)
+ *   (everyone else)  → same as SERVICE_HEAD / global alerts only
+ */
+export async function fetchActiveAlerts(profile = null) {
   const now = new Date().toISOString();
+
+  console.log('[fetchActiveAlerts] current profile:', profile);
+
+  // Fetch all time-active alerts first; we filter by scope client-side
+  // because Supabase does not easily support "array overlap OR null" in one filter.
   const { data, error } = await supabase
     .from('alerts')
     .select('*')
@@ -855,28 +870,100 @@ export async function fetchActiveAlerts() {
 
   if (error) {
     console.warn('[fetchActiveAlerts] Error fetching alerts:', error.message);
-    return []; // Return empty gracefully if table is missing or RLS blocks
+    return [];
   }
-  return data || [];
+
+  const alerts = data || [];
+  const role = profile?.role;
+
+  // ADMIN sees everything
+  if (role === 'ADMIN') {
+    console.log('[fetchActiveAlerts] ADMIN — returning all alerts:', alerts.length);
+    return alerts;
+  }
+
+  // SERVANT — strict single-grade + gender scope
+  if (role === 'SERVANT') {
+    const assignedGrade  = profile.assigned_grade;
+    const assignedGender = profile.assigned_gender;
+    console.log('[fetchActiveAlerts] SERVANT scope — grade:', assignedGrade, 'gender:', assignedGender);
+
+    const visible = alerts.filter(a => {
+      // Alerts with no target_grades (legacy / global) are hidden from servants
+      if (!a.target_grades || a.target_grades.length === 0) return false;
+      // Grade must match
+      if (!a.target_grades.includes(assignedGrade)) return false;
+      // Gender must match if specified
+      if (a.target_genders && a.target_genders.length > 0) {
+        if (!a.target_genders.includes(assignedGender)) return false;
+      }
+      return true;
+    });
+
+    console.log('[fetchActiveAlerts] visible alert target_grades:', visible.map(a => a.target_grades));
+    console.log('[fetchActiveAlerts] final visible alerts:', visible.length);
+    return visible;
+  }
+
+  // SERVICE_HEAD — sees alerts that overlap their assigned grades, plus global alerts
+  if (role === 'SERVICE_HEAD') {
+    // assigned_grades may be an array in the profile, or fall back to a single assigned_grade
+    const headGrades = Array.isArray(profile.assigned_grades)
+      ? profile.assigned_grades
+      : profile.assigned_grade ? [profile.assigned_grade] : [];
+
+    console.log('[fetchActiveAlerts] SERVICE_HEAD scope — grades:', headGrades);
+
+    const visible = alerts.filter(a => {
+      if (a.is_global) return true;
+      if (!a.target_grades || a.target_grades.length === 0) return true; // legacy alert
+      return a.target_grades.some(g => headGrades.includes(g));
+    });
+
+    console.log('[fetchActiveAlerts] visible alert target_grades:', visible.map(a => a.target_grades));
+    console.log('[fetchActiveAlerts] final visible alerts:', visible.length);
+    return visible;
+  }
+
+  // Any other role — return global / unscoped alerts only
+  const visible = alerts.filter(a => a.is_global || !a.target_grades || a.target_grades.length === 0);
+  console.log('[fetchActiveAlerts] default scope — final visible alerts:', visible.length);
+  return visible;
 }
 
-/** Insert a new system alert */
-export async function saveSystemAlert({ title, text, type, durationDays }) {
+/**
+ * Insert a new system alert with optional grade/gender targeting.
+ *
+ * @param {object} params
+ * @param {string}   params.title
+ * @param {string}   params.text
+ * @param {string}   params.type         emoji icon
+ * @param {number}   params.durationDays
+ * @param {string[]} [params.targetGrades]   Array of grade labels to target, or null/[] for global
+ * @param {string[]} [params.targetGenders]  Array of genders to target, or null/[] for all
+ * @param {string}   [params.createdByRole]  Role of the creator
+ * @param {boolean}  [params.isGlobal]       If true, visible to ADMIN and SERVICE_HEAD
+ */
+export async function saveSystemAlert({ title, text, type, durationDays, targetGrades, targetGenders, createdByRole, isGlobal }) {
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
 
   const startDate = new Date();
-  const endDate = new Date();
+  const endDate   = new Date();
   endDate.setDate(startDate.getDate() + durationDays);
 
   const payload = {
     title,
-    description: text,
-    alert_type: type || 'تنبيه',
-    priority: 1,
-    is_active: true,
-    starts_at: startDate.toISOString(),
-    ends_at: endDate.toISOString(),
+    description:      text,
+    alert_type:       type || 'تنبيه',
+    priority:         1,
+    is_active:        true,
+    starts_at:        startDate.toISOString(),
+    ends_at:          endDate.toISOString(),
+    target_grades:    targetGrades  && targetGrades.length  > 0 ? targetGrades  : null,
+    target_genders:   targetGenders && targetGenders.length > 0 ? targetGenders : null,
+    created_by_role:  createdByRole || null,
+    is_global:        isGlobal ?? false,
   };
 
   if (userId) payload.created_by = userId;
