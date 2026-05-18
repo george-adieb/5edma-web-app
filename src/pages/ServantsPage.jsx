@@ -1,57 +1,125 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Loader2, UserPlus } from 'lucide-react';
-import { servantRoles, servantStages, servants as mockServants } from '../data/mockData';
+import { fetchServants } from '../lib/database';
+import { useAuth } from '../contexts/AuthContext';
 import { useIsMobile } from '../hooks/useWindowWidth';
 
-const STATUS_BADGE = {
-  'نشط':     { bg: '#DCFCE7', color: '#16A34A', dot: '#16A34A' },
-  'غير نشط': { bg: '#F3F4F6', color: '#6B7280', dot: '#9CA3AF' },
+// ── Role filter options (maps to profiles.role) ───────────────
+const ROLE_FILTER_OPTIONS = [
+  { id: 'all', label: 'الكل' },
+  { id: 'ADMIN', label: 'الأمانة العامة' },
+  { id: 'GENERAL_SECRETARIAT', label: 'الأمانة العامة' },
+  { id: 'SERVICE_HEAD', label: 'أمين خدمة' },
+  { id: 'SERVANT', label: 'خادم مرحلة' },
+];
+
+// Deduplicated for display (ADMIN and GENERAL_SECRETARIAT share a label)
+const ROLE_PILLS = [
+  { id: 'all', label: 'الكل' },
+  { id: 'ADMIN', label: 'الأمانة العامة' },
+  { id: 'SERVICE_HEAD', label: 'أمين خدمة' },
+  { id: 'SERVANT', label: 'خادم مرحلة' },
+];
+
+// Stage keyword pills — matched against stageDisplay text
+const STAGE_PILLS = [
+  { id: 'all', label: 'الكل' },
+  { id: 'حضانة', label: 'حضانة' },
+  { id: 'ابتدائي', label: 'ابتدائي' },
+  { id: 'إعدادي', label: 'إعدادي' },
+  { id: 'ثانوي', label: 'ثانوي' },
+  { id: 'جامعة', label: 'جامعة' },
+  { id: 'خريجين', label: 'خريجين' },
+];
+
+// Role badge style
+const ROLE_BADGE_STYLE = {
+  SERVANT: { bg: '#EEF2FF', color: '#4F46E5' },
+  SERVICE_HEAD: { bg: '#FEF3C7', color: '#D97706' },
+  ADMIN: { bg: '#FEE2E2', color: '#8B1A1A' },
+  GENERAL_SECRETARIAT: { bg: '#FEE2E2', color: '#8B1A1A' },
 };
 
-const COLS = '2.5fr 1.5fr 1.5fr 1fr 1fr';
+const COLS = '2.5fr 1.5fr 2fr 1fr';
 
 export default function ServantsPage() {
   const navigate = useNavigate();
-  const { globalSearch, setGlobalSearch } = useOutletContext() || { globalSearch: '', setGlobalSearch: () => {} };
+  const { globalSearch, setGlobalSearch } = useOutletContext() || { globalSearch: '', setGlobalSearch: () => { } };
+  const { profile: currentProfile } = useAuth();
   const isMobile = useIsMobile();
+
   const [servants, setServants] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
-  const [stage,    setStage]    = useState('all');
-  const [role,     setRole]     = useState('all');
-  const [page,     setPage]     = useState(1);
-  const PER = 8;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stageFilter, setStageFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const PER = 10;
 
-  useEffect(() => {
+  async function load() {
+    if (!currentProfile) return; // wait for auth to resolve
     setLoading(true);
-    setTimeout(() => { setServants(mockServants); setLoading(false); }, 600);
-  }, []);
-
-  const filtered = servants.filter(s => {
-    let matchSearch = true;
-    if (globalSearch) {
-      const q = globalSearch.toLowerCase();
-      const sName = (s.name || '').toLowerCase();
-      const sEmail = (s.email || '').toLowerCase();
-      const sRole = (s.role || '').toLowerCase();
-      const sStage = (s.stage || s.stage_group || '').toLowerCase();
-      matchSearch = sName.includes(q) || sEmail.includes(q) || sRole.includes(q) || sStage.includes(q);
+    setError(null);
+    try {
+      const data = await fetchServants(currentProfile);
+      console.log('[ServantsPage] scoped servants list:', data.map(s => ({ name: s.full_name, role: s.role, grade: s.assigned_grade || s.assigned_grades })));
+      setServants(data);
+    } catch (err) {
+      console.error('[ServantsPage] load error:', err);
+      setError('تعذّر تحميل قائمة الخدام. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
     }
-    const r  = role  === 'all' || s.role  === role;
-    const st = stage === 'all' || s.stage === stage;
-    return matchSearch && r && st;
-  });
+  }
+
+  useEffect(() => { load(); }, [currentProfile]);
+
+  // ── Filtering ─────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return servants.filter(s => {
+      // Global search: name, roleLabel, stageDisplay
+      if (globalSearch) {
+        const q = globalSearch.toLowerCase();
+        const matchName = (s.full_name || '').toLowerCase().includes(q);
+        const matchRole = (s.roleLabel || '').toLowerCase().includes(q);
+        const matchStage = (s.stageDisplay || '').toLowerCase().includes(q);
+        if (!matchName && !matchRole && !matchStage) return false;
+      }
+
+      // Role filter — ADMIN and GENERAL_SECRETARIAT treated as the same pill
+      if (roleFilter !== 'all') {
+        const isAdminPill = roleFilter === 'ADMIN';
+        if (isAdminPill) {
+          if (s.role !== 'ADMIN' && s.role !== 'GENERAL_SECRETARIAT') return false;
+        } else {
+          if (s.role !== roleFilter) return false;
+        }
+      }
+
+      // Stage keyword filter
+      if (stageFilter !== 'all') {
+        const stage = (s.stageDisplay || '').toLowerCase();
+        if (!stage.includes(stageFilter.toLowerCase())) return false;
+      }
+
+      return true;
+    });
+  }, [servants, globalSearch, roleFilter, stageFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER));
-  const visible    = filtered.slice((page - 1) * PER, page * PER);
+  const visible = filtered.slice((page - 1) * PER, page * PER);
 
+  // Reset to page 1 when filters change
+  useEffect(() => setPage(1), [globalSearch, roleFilter, stageFilter]);
+
+  // ── Pill button helper ─────────────────────────────────────
   const pillBtn = (active, onClick, label) => (
     <button onClick={onClick} style={{
       padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
       fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12.5px', border: 'none',
       background: active ? '#8B1A1A' : '#F3F4F6',
-      color:      active ? 'white'   : '#6B7280',
+      color: active ? 'white' : '#6B7280',
       transition: 'all 0.15s', minHeight: '34px',
     }}>{label}</button>
   );
@@ -73,7 +141,7 @@ export default function ServantsPage() {
           <p style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</p>
           <p style={{ fontSize: '14px', color: '#DC2626', fontWeight: 700 }}>{error}</p>
           <button
-            onClick={() => { setError(null); setLoading(true); setTimeout(() => { setServants(mockServants); setLoading(false); }, 600); }}
+            onClick={load}
             style={{ marginTop: '12px', padding: '10px 20px', borderRadius: '8px', background: '#8B1A1A', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontWeight: 700, minHeight: '44px' }}
           >إعادة المحاولة</button>
         </div>
@@ -81,26 +149,28 @@ export default function ServantsPage() {
 
       {!loading && !error && (
         <>
-          {/* Page header — responsive flex */}
+          {/* Page header */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ textAlign: 'right' }}>
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827' }}>قائمة الخدام</h1>
               <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
-                إدارة وتفاصيل خدام الخدمة والاجتماعات
+                إدارة وتفاصيل خدام الخدمة — البيانات من نظام الحسابات مباشرةً
               </p>
             </div>
-            <button onClick={() => navigate('/servants/new')} style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 16px', borderRadius: '10px',
-              background: '#8B1A1A', color: 'white',
-              border: 'none', cursor: 'pointer',
-              fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
-              boxShadow: '0 4px 12px rgba(139,26,26,0.2)',
-              transition: 'transform 0.15s', flexShrink: 0, minHeight: '44px',
-            }}>
-              <UserPlus size={16} />
-              إضافة خادم
-            </button>
+            {(currentProfile?.role === 'ADMIN' || currentProfile?.role === 'GENERAL_SECRETARIAT') && (
+              <button onClick={() => navigate('/servants/new')} style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 16px', borderRadius: '10px',
+                background: '#8B1A1A', color: 'white',
+                border: 'none', cursor: 'pointer',
+                fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
+                boxShadow: '0 4px 12px rgba(139,26,26,0.2)',
+                transition: 'transform 0.15s', flexShrink: 0, minHeight: '44px',
+              }}>
+                <UserPlus size={16} />
+                إضافة خادم
+              </button>
+            )}
           </div>
 
           {/* Filter bar */}
@@ -121,10 +191,10 @@ export default function ServantsPage() {
               <div style={{ position: 'relative', flex: 1, minWidth: '140px', maxWidth: '280px' }}>
                 <svg style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }}
                   width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                 </svg>
                 <input
-                  placeholder="ابحث بالاسم أو البريد..."
+                  placeholder="ابحث بالاسم أو الدور أو المرحلة..."
                   value={globalSearch}
                   onChange={e => { setGlobalSearch(e.target.value); setPage(1); }}
                   style={{
@@ -132,7 +202,7 @@ export default function ServantsPage() {
                     background: '#F9FAFB', border: '1.5px solid #F3F4F6',
                     borderRadius: '8px', fontFamily: 'Cairo, sans-serif',
                     fontSize: '13px', color: '#374151', direction: 'rtl', outline: 'none',
-                    minHeight: '38px',
+                    minHeight: '38px', boxSizing: 'border-box',
                   }}
                 />
               </div>
@@ -141,13 +211,17 @@ export default function ServantsPage() {
             {/* Stage pills */}
             <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', whiteSpace: 'nowrap' }}>المرحلة</span>
-              {servantStages.map(c => <span key={c.id}>{pillBtn(stage === c.id, () => { setStage(c.id); setPage(1); }, c.label)}</span>)}
+              {STAGE_PILLS.map(c => (
+                <span key={c.id}>{pillBtn(stageFilter === c.id, () => { setStageFilter(c.id); setPage(1); }, c.label)}</span>
+              ))}
             </div>
 
             {/* Role pills */}
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', whiteSpace: 'nowrap' }}>الدور</span>
-              {servantRoles.map(r => <span key={r.id}>{pillBtn(role === r.id, () => { setRole(r.id); setPage(1); }, r.label)}</span>)}
+              {ROLE_PILLS.map(r => (
+                <span key={r.id}>{pillBtn(roleFilter === r.id, () => { setRoleFilter(r.id); setPage(1); }, r.label)}</span>
+              ))}
             </div>
           </div>
 
@@ -164,7 +238,7 @@ export default function ServantsPage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6', direction: 'rtl',
               }}>
-                {['الاسم', 'الدور', 'المرحلة', 'الحالة', 'الإجراءات'].map((h, i) => (
+                {['الاسم', 'الدور', 'المرحلة المسؤولة', 'تاريخ الإضافة'].map((h, i) => (
                   <p key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
@@ -174,13 +248,17 @@ export default function ServantsPage() {
             {visible.length === 0 && (
               <div style={{ textAlign: 'center', padding: '48px' }}>
                 <p style={{ fontSize: '28px', marginBottom: '8px' }}>🔍</p>
-                <p style={{ fontSize: '13px', color: '#6B7280' }}>لا توجد نتائج مطابقة</p>
+                <p style={{ fontSize: '13px', color: '#6B7280', fontWeight: 700 }}>لا توجد نتائج مطابقة</p>
+                <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>جرّب تعديل البحث أو الفلتر</p>
               </div>
             )}
 
             {/* Rows */}
             {visible.map(s => {
-              const badge = STATUS_BADGE[s.status] || { bg: '#F3F4F6', color: '#6B7280', dot: '#9CA3AF' };
+              const badgeStyle = ROLE_BADGE_STYLE[s.role] || { bg: '#F3F4F6', color: '#6B7280' };
+              const joinedDate = s.created_at
+                ? new Date(s.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })
+                : '—';
 
               // Mobile card
               if (isMobile) {
@@ -193,26 +271,25 @@ export default function ServantsPage() {
                     {/* Avatar */}
                     <div style={{
                       width: '42px', height: '42px', borderRadius: '10px', flexShrink: 0,
-                      background: s.avatarColor || '#8B1A1A', color: 'white',
+                      background: s.avatarColor, color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '13px', fontWeight: 700,
                     }}>{s.avatar}</div>
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
-                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>{s.role} · {s.stage || '—'}</p>
+                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.full_name || '—'}</p>
+                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>{s.roleLabel} · {s.stageDisplay}</p>
                     </div>
 
-                    {/* Status */}
+                    {/* Role badge */}
                     <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      display: 'inline-flex', alignItems: 'center',
                       padding: '4px 8px', borderRadius: '20px', flexShrink: 0,
                       fontSize: '11px', fontWeight: 700,
-                      background: badge.bg, color: badge.color,
+                      background: badgeStyle.bg, color: badgeStyle.color,
                     }}>
-                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: badge.dot }} />
-                      {s.status}
+                      {s.roleLabel}
                     </span>
                   </div>
                 );
@@ -229,38 +306,42 @@ export default function ServantsPage() {
                   onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
                   onMouseLeave={e => e.currentTarget.style.background = 'white'}
                 >
+                  {/* Name + avatar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{
                       width: '38px', height: '38px', borderRadius: '10px', flexShrink: 0,
-                      background: s.avatarColor || '#8B1A1A', color: 'white',
+                      background: s.avatarColor, color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '12px', fontWeight: 700,
                     }}>{s.avatar}</div>
                     <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
-                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>{s.email || s.phone || '—'}</p>
+                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.full_name || '—'}</p>
+                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>
+                        {s.assigned_gender ? s.assigned_gender : 'لا يوجد جنس محدد'}
+                      </p>
                     </div>
                   </div>
+
+                  {/* Role badge */}
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#8B1A1A', background: '#FEF2F2', padding: '4px 10px', borderRadius: '14px' }}>
-                      {s.role}
+                    <span style={{
+                      fontSize: '11.5px', fontWeight: 700,
+                      background: badgeStyle.bg, color: badgeStyle.color,
+                      padding: '4px 10px', borderRadius: '14px',
+                    }}>
+                      {s.roleLabel}
                     </span>
                   </div>
-                  <p style={{ fontSize: '12.5px', color: '#374151', textAlign: 'center', fontWeight: 600 }}>{s.stage || '—'}</p>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: badge.bg, color: badge.color }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: badge.dot, flexShrink: 0 }} />
-                      {s.status}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <button style={{
-                      padding: '6px 12px', borderRadius: '6px', background: 'white',
-                      border: '1px solid #E5E7EB', cursor: 'pointer', color: '#374151',
-                      fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
-                      transition: 'all 0.15s', minHeight: '34px',
-                    }}>عرض التفاصيل</button>
-                  </div>
+
+                  {/* Stage display */}
+                  <p style={{
+                    fontSize: '12.5px', color: '#374151',
+                    textAlign: 'center', fontWeight: 600,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{s.stageDisplay}</p>
+
+                  {/* Joined date */}
+                  <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>{joinedDate}</p>
                 </div>
               );
             })}
@@ -272,19 +353,19 @@ export default function ServantsPage() {
               direction: 'rtl', flexWrap: 'wrap', gap: '8px',
             }}>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map(n => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 7).map(n => (
                   <button key={`page-${n}`} onClick={() => setPage(n)} style={{
                     width: '34px', height: '34px', borderRadius: '6px', cursor: 'pointer',
                     fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12px',
                     border: '1px solid #E5E7EB',
                     background: page === n ? '#8B1A1A' : 'white',
-                    color:      page === n ? 'white'   : '#374151',
+                    color: page === n ? 'white' : '#374151',
                   }}>{n}</button>
                 ))}
-                {totalPages > 5 && <span style={{ fontSize: '12px', color: '#9CA3AF', padding: '0 4px' }}>...</span>}
+                {totalPages > 7 && <span style={{ fontSize: '12px', color: '#9CA3AF', padding: '0 4px' }}>...</span>}
               </div>
               <p style={{ fontSize: '12px', color: '#9CA3AF' }}>
-                عرض {visible.length} من أصل {filtered.length} خدام
+                عرض {visible.length} من أصل {filtered.length} خادم
               </p>
             </div>
           </div>

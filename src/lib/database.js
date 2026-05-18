@@ -19,6 +19,7 @@ function applyServantScope(query, profile) {
   return query;
 }
 
+
 // ─── STUDENTS ─────────────────────────────────────────────────────────────────
 
 /** Fetch all students ordered by name, with role-based filtering */
@@ -389,13 +390,36 @@ export async function deleteStudent(id) {
 // ─── SERVANTS ─────────────────────────────────────────────────────────────────
 
 /** Fetch all servants ordered by name */
-export async function fetchServants() {
+export async function fetchServants(currentProfile) {
   const { data, error } = await supabase
-    .from('servants')
+    .from('profiles')
     .select('*')
-    .order('full_name');
+    .order('full_name', { ascending: true });
+
   if (error) throw error;
-  return data;
+
+  const role = currentProfile?.role;
+  const myGrade = currentProfile?.assigned_grade;
+  const myGrades = Array.isArray(currentProfile?.assigned_grades) ? currentProfile.assigned_grades : [];
+
+  if (role === 'ADMIN' || role === 'GENERAL_SECRETARIAT') {
+    return data;
+  }
+
+  if (role === 'SERVICE_HEAD') {
+    return data.filter(p => {
+      if (p.id === currentProfile.id) return true;
+      if (p.role === 'ADMIN' || p.role === 'GENERAL_SECRETARIAT') return true;
+      if (p.role === 'SERVANT' && myGrades.includes(p.assigned_grade)) return true;
+      if (p.role === 'SERVICE_HEAD') {
+        const theirGrades = Array.isArray(p.assigned_grades) ? p.assigned_grades : [];
+        return theirGrades.some(g => myGrades.includes(g));
+      }
+      return false;
+    });
+  }
+
+  return [];
 }
 
 /** Insert a new servant */
@@ -428,7 +452,7 @@ export async function insertServant(servantData) {
   };
 
   console.log('[insertServant] payload →', row);
-  const { data, error } = await supabase.from('servants').insert(row).select().single();
+  const { data, error } = await supabase.from('profiles').insert(row).select().single();
   console.log('[insertServant] response →', data);
   if (error) {
     console.error('[insertServant] error →', error);
@@ -747,7 +771,7 @@ export async function fetchDashboardStats(fridayDate, profile = null) {
     // 3 — small set of students for the avatar row (scoped)
     avatarQuery,
     // 4 — total servants (not scoped — servants are global)
-    supabase.from('servants').select('*', { count: 'exact', head: true }),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }),
   ]);
 
   const safe = (i, fallback) =>

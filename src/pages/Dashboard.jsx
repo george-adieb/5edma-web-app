@@ -40,18 +40,18 @@ export default function Dashboard() {
   const canAddAlert = ['ADMIN', 'GENERAL_SECRETARIAT', 'SERVICE_HEAD', 'SERVANT', 'الأمانة العامة', 'أمين خدمة'].includes(profile?.role);
 
   // ── State ────────────────────────────────────────────────────
-  const [stats,      setStats]      = useState(null);   // fetchDashboardStats result
+  const [stats, setStats] = useState(null);   // fetchDashboardStats result
   const [absentList, setAbsentList] = useState([]);     // absent students list
   const [systemAlerts, setSystemAlerts] = useState([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // ── Alert Modal State ─────────────────────────────────────────
   const [showAddAlert, setShowAddAlert] = useState(false);
-  const [alertTitle,   setAlertTitle]   = useState('');
-  const [alertText,    setAlertText]    = useState('');
-  const [alertIcon,    setAlertIcon]    = useState('⚠️');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertText, setAlertText] = useState('');
+  const [alertIcon, setAlertIcon] = useState('⚠️');
   const [alertDuration, setAlertDuration] = useState(7);
   const [isSavingAlert, setIsSavingAlert] = useState(false);
   // Grade targeting: SERVANT is auto-locked; SERVICE_HEAD picks from their grades; ADMIN picks all
@@ -59,11 +59,9 @@ export default function Dashboard() {
 
   // All grade label options (strip empty placeholder)
   const allGradeOptions = GRADES.filter(g => g.id).map(g => g.label);
-  // Grades this SERVICE_HEAD is responsible for
+  // Grades this SERVICE_HEAD is responsible for (canonical: assigned_grades array)
   const serviceHeadGrades = profile?.role === 'SERVICE_HEAD'
-    ? (Array.isArray(profile.assigned_grades)
-        ? profile.assigned_grades
-        : profile.assigned_grade ? [profile.assigned_grade] : [])
+    ? (Array.isArray(profile.assigned_grades) ? profile.assigned_grades : [])
     : [];
   // Grades the current user is allowed to target
   const targetableGrades = profile?.role === 'ADMIN'
@@ -135,10 +133,10 @@ export default function Dashboard() {
   }, [activeFriday, profile]);
 
   // ── Safe accessors with fallback ─────────────────────────────
-  const totalStudents  = stats?.totalStudents  ?? 0;
-  const presentCount   = stats?.presentCount   ?? 0;
-  const absentCount    = stats?.absentCount    ?? 0;
-  const needFollowUp   = stats?.needFollowUp   ?? 0;
+  const totalStudents = stats?.totalStudents ?? 0;
+  const presentCount = stats?.presentCount ?? 0;
+  const absentCount = stats?.absentCount ?? 0;
+  const needFollowUp = stats?.needFollowUp ?? 0;
   const avatarStudents = stats?.avatarStudents ?? [];
 
   const pad2 = n => String(n).padStart(2, '0');
@@ -150,11 +148,11 @@ export default function Dashboard() {
     try {
       const isGlobal = profile?.role === 'ADMIN' && alertTargetGrades.length === 0;
       await saveSystemAlert({
-        title:        alertTitle.trim(),
-        text:         alertText.trim(),
-        type:         alertIcon,
+        title: alertTitle.trim(),
+        text: alertText.trim(),
+        type: alertIcon,
         durationDays: Number(alertDuration),
-        targetGrades:  alertTargetGrades.length > 0 ? alertTargetGrades : null,
+        targetGrades: alertTargetGrades.length > 0 ? alertTargetGrades : null,
         targetGenders: null,
         createdByRole: profile?.role || null,
         isGlobal,
@@ -239,7 +237,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', marginTop: '12px' }}>
             {loading ? (
               // Skeleton avatar row
-              [0,1,2,3].map(i => (
+              [0, 1, 2, 3].map(i => (
                 <div key={i} style={{
                   width: '26px', height: '26px', borderRadius: '50%',
                   background: '#E5E7EB', border: '2px solid white',
@@ -340,7 +338,7 @@ export default function Dashboard() {
 
           {/* Loading skeleton rows */}
           {loading && (
-            [0,1,2].map(i => (
+            [0, 1, 2].map(i => (
               <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid #F9FAFB' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
                   <div>
@@ -426,7 +424,7 @@ export default function Dashboard() {
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>تنبيهات هامة</h2>
             </div>
             {canAddAlert && (
-              <button 
+              <button
                 onClick={openAddAlertModal}
                 style={{
                   background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white',
@@ -539,12 +537,12 @@ export default function Dashboard() {
             <form onSubmit={handleAddAlert} style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>عنوان التنبيه <span style={{color: '#DC2626'}}>*</span></label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>عنوان التنبيه <span style={{ color: '#DC2626' }}>*</span></label>
                 <input required value={alertTitle} onChange={e => setAlertTitle(e.target.value)} type="text" placeholder="مثال: موعد قداس الخدمة" style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
 
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>وصف التنبيه <span style={{color: '#DC2626'}}>*</span></label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>وصف التنبيه <span style={{ color: '#DC2626' }}>*</span></label>
                 <textarea required value={alertText} onChange={e => setAlertText(e.target.value)} placeholder="اكتب تفاصيل التنبيه بوضوح..." style={{ width: '100%', height: '80px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', fontFamily: 'Cairo', fontSize: '13px', outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
               </div>
 
