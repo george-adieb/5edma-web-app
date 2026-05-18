@@ -13,17 +13,17 @@ import { useAuth } from '../contexts/AuthContext';
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const CONTACT_TYPES = [
-  { key: 'مكالمة', label: 'مكالمة', Icon: Phone,         sel: { background: '#1D4ED8', color: 'white', borderColor: '#1D4ED8' } },
-  { key: 'زيارة',  label: 'زيارة',  Icon: Home,          sel: { background: '#8B1A1A', color: 'white', borderColor: '#8B1A1A' } },
-  { key: 'رسالة',  label: 'رسالة',  Icon: MessageSquare, sel: { background: '#7C3AED', color: 'white', borderColor: '#7C3AED' } },
+  { key: 'مكالمة', label: 'مكالمة', Icon: Phone, sel: { background: '#1D4ED8', color: 'white', borderColor: '#1D4ED8' } },
+  { key: 'زيارة', label: 'زيارة', Icon: Home, sel: { background: '#8B1A1A', color: 'white', borderColor: '#8B1A1A' } },
+  { key: 'رسالة', label: 'رسالة', Icon: MessageSquare, sel: { background: '#7C3AED', color: 'white', borderColor: '#7C3AED' } },
 ];
 
 // Priority levels — driven by consecutive Friday absence count
 // consecutive >= 3 → urgent | == 2 → high | == 1 → normal
 const URGENCY = {
-  urgent: { label: 'عاجل',    bg: '#FEE2E2', color: '#DC2626' }, // 3+ Fridays
-  high:   { label: 'مهم',     bg: '#FEF3C7', color: '#D97706' }, // 2 Fridays
-  normal: { label: 'متابعة',  bg: '#EEF2FF', color: '#4F46E5' }, // 1 Friday
+  urgent: { label: 'عاجل', bg: '#FEE2E2', color: '#DC2626' }, // 3+ Fridays
+  high: { label: 'مهم', bg: '#FEF3C7', color: '#D97706' }, // 2 Fridays
+  normal: { label: 'متابعة', bg: '#EEF2FF', color: '#4F46E5' }, // 1 Friday
 };
 
 /** Derive urgency key from consecutive absence count. */
@@ -48,8 +48,8 @@ const LOOKBACK_WEEKS = 8;
 
 const LOG_TYPE_COLORS = {
   مكالمة: { bg: '#DBEAFE', color: '#1D4ED8' },
-  زيارة:  { bg: '#FEF9C3', color: '#B45309' },
-  رسالة:  { bg: '#F3E8FF', color: '#7C3AED' },
+  زيارة: { bg: '#FEF9C3', color: '#B45309' },
+  رسالة: { bg: '#F3E8FF', color: '#7C3AED' },
 };
 
 const SELECT_STYLE = {
@@ -78,18 +78,18 @@ export default function FollowUpPage() {
 
   // ── Data state ─────────────────────────────────────────────
   const [followUpStudents, setFollowUpStudents] = useState([]);
-  const [logs,             setLogs]             = useState([]);
-  const [loading,          setLoading]          = useState(true);
-  const [loadError,        setLoadError]        = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   // ── Form state ─────────────────────────────────────────────
-  const [selected,      setSelected]      = useState(null);
-  const [type,          setType]          = useState('مكالمة');
+  const [selected, setSelected] = useState(null);
+  const [type, setType] = useState('مكالمة');
   const [contactStatus, setContactStatus] = useState('يحتاج متابعة');
-  const [notes,         setNotes]         = useState('');
-  const [saving,        setSaving]        = useState(false);
-  const [saved,         setSaved]         = useState(false);
-  const [saveError,     setSaveError]     = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // ── Load ───────────────────────────────────────────────────
   async function loadData() {
@@ -133,7 +133,7 @@ export default function FollowUpPage() {
   const filteredFollowUpStudents = useMemo(() => {
     if (!globalSearch) return followUpStudents;
     const q = globalSearch.toLowerCase();
-    return followUpStudents.filter(s => 
+    return followUpStudents.filter(s =>
       (s.name || '').toLowerCase().includes(q) ||
       (s.grade || '').toLowerCase().includes(q)
     );
@@ -146,7 +146,7 @@ export default function FollowUpPage() {
     setSaveError('');
     try {
       await saveFollowUpLog({
-        studentId:     selected.id,
+        studentId: selected.id,
         type,
         notes,
         contactStatus,
@@ -243,7 +243,7 @@ export default function FollowUpPage() {
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', display: 'block', marginBottom: '6px' }}>نوع التواصل</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               {CONTACT_TYPES.map(ct => {
-                const Icon     = ct.Icon;
+                const Icon = ct.Icon;
                 const isActive = type === ct.key;
                 return (
                   <button key={ct.key} onClick={() => setType(ct.key)} style={{
@@ -286,7 +286,7 @@ export default function FollowUpPage() {
                 direction: 'rtl', outline: 'none', background: 'white',
               }}
               onFocus={e => e.target.style.borderColor = '#8B1A1A'}
-              onBlur={e  => e.target.style.borderColor = '#E5E7EB'}
+              onBlur={e => e.target.style.borderColor = '#E5E7EB'}
             />
           </div>
 
@@ -367,10 +367,10 @@ export default function FollowUpPage() {
 
             {/* Real follow-up student cards — sorted by attendance-based priority */}
             {!loading && filteredFollowUpStudents.map(f => {
-              const level   = urgencyLevel(f.absenceConsecutive);
-              const urg     = URGENCY[level];
+              const level = urgencyLevel(f.absenceConsecutive);
+              const urg = URGENCY[level];
               const lastLog = f.latestLog;
-              const typeC   = lastLog ? (LOG_TYPE_COLORS[lastLog.type] || {}) : {};
+              const typeC = lastLog ? (LOG_TYPE_COLORS[lastLog.type] || {}) : {};
               const durationText = absenceDurationLabel(f.absenceConsecutive, f.absenceTotal);
 
               return (
@@ -422,7 +422,7 @@ export default function FollowUpPage() {
                         }}>
                           {lastLog.type === 'مكالمة' ? <Phone size={14} />
                             : lastLog.type === 'زيارة' ? <Home size={14} />
-                            : <MessageSquare size={14} />}
+                              : <MessageSquare size={14} />}
                         </div>
                       )}
                     </div>
@@ -468,7 +468,7 @@ export default function FollowUpPage() {
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
               }}>
                 <p style={{ fontSize: '28px', marginBottom: '8px' }}>🎉</p>
-                <p style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>ما شاء الله!</p>
+                <p style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>نعمة ربنا واضحة!</p>
                 <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>لا يوجد مخدومين يحتاجون متابعة حالياً</p>
               </div>
             )}
@@ -506,7 +506,7 @@ export default function FollowUpPage() {
         {/* Loading skeletons */}
         {loading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[0,1,2].map(i => (
+            {[0, 1, 2].map(i => (
               <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#E5E7EB', marginTop: '6px', flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
