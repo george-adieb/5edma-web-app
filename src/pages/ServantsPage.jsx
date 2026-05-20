@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Loader2, UserPlus } from 'lucide-react';
-import { fetchServants } from '../lib/database';
+import { fetchServants, deleteServantProfile } from '../lib/database';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useIsMobile } from '../hooks/useWindowWidth';
+import RowActionsMenu from '../components/RowActionsMenu';
 
 // ── Role filter options (maps to profiles.role) ───────────────
 const ROLE_FILTER_OPTIONS = [
@@ -41,7 +43,7 @@ const ROLE_BADGE_STYLE = {
   GENERAL_SECRETARIAT: { bg: '#FEE2E2', color: '#8B1A1A' },
 };
 
-const COLS = '2.5fr 1.5fr 2fr 1fr';
+const COLS = '2fr 1fr 1.5fr 1fr 1fr 0.5fr';
 
 export default function ServantsPage() {
   const navigate = useNavigate();
@@ -56,20 +58,104 @@ export default function ServantsPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [page, setPage] = useState(1);
   const PER = 10;
+  
+  const [deleteModal, setDeleteModal] = useState({ show: false, id: null });
+  const [deleting, setDeleting] = useState(false);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState('');
 
   async function load() {
     if (!currentProfile) return; // wait for auth to resolve
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchServants(currentProfile);
-      console.log('[ServantsPage] scoped servants list:', data.map(s => ({ name: s.full_name, role: s.role, grade: s.assigned_grade || s.assigned_grades })));
-      setServants(data);
+      console.log('ServantsPage currentProfile:', currentProfile);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, assigned_grade, assigned_grades, assigned_gender, status, email, created_at, phone, address, confession_father, job, talents, notes')
+        .in('role', ['ADMIN', 'SERVICE_HEAD', 'SERVANT', 'GENERAL_SECRETARIAT'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      let scopedData = data || [];
+      if (currentProfile.role === 'SERVICE_HEAD') {
+         const myGrades = Array.isArray(currentProfile.assigned_grades) ? currentProfile.assigned_grades : (currentProfile.assigned_grade ? [currentProfile.assigned_grade] : []);
+         scopedData = data.filter(p => {
+             if (p.id === currentProfile.id) return true;
+             if (p.role === 'ADMIN' || p.role === 'GENERAL_SECRETARIAT') return true;
+             if (p.role === 'SERVANT' && myGrades.includes(p.assigned_grade)) return true;
+             if (p.role === 'SERVICE_HEAD') {
+                 const theirGrades = Array.isArray(p.assigned_grades) ? p.assigned_grades : [];
+                 return theirGrades.some(g => myGrades.includes(g));
+             }
+             return false;
+         });
+      }
+
+      const mappedData = scopedData.map(s => {
+        let roleLabel = s.role;
+        if (s.role === 'ADMIN' || s.role === 'GENERAL_SECRETARIAT') roleLabel = 'الأمانة العامة';
+        else if (s.role === 'SERVICE_HEAD') roleLabel = 'أمين خدمة';
+        else if (s.role === 'SERVANT') roleLabel = 'خادم مرحلة';
+
+        let stageDisplay = '—';
+        if (s.role === 'SERVANT') stageDisplay = s.assigned_grade || '—';
+        else if (s.role === 'SERVICE_HEAD') stageDisplay = (Array.isArray(s.assigned_grades) ? s.assigned_grades : []).join('، ') || '—';
+        else if (s.role === 'ADMIN' || s.role === 'GENERAL_SECRETARIAT') stageDisplay = 'كل المراحل';
+
+        const nameParts = (s.full_name || '').split(' ');
+        const avatar = nameParts.length >= 2 ? (nameParts[0][0] + nameParts[1][0]) : (s.full_name?.[0] || '؟');
+        
+        let hash = 0;
+        for (let i = 0; i < (s.full_name || '').length; i++) hash = (s.full_name || '').charCodeAt(i) + ((hash << 5) - hash);
+        const hue = Math.abs(hash) % 360;
+        const avatarColor = `hsl(${hue}, 60%, 40%)`;
+
+        const displayGender = s.assigned_gender ? s.assigned_gender : 'لا يوجد جنس محدد';
+        const displayStatus = (s.status === 'غير نشط' || s.status === 'inactive') ? 'غير نشط' : 'نشط';
+
+        return { ...s, roleLabel, stageDisplay, avatar, avatarColor, displayGender, displayStatus };
+      });
+
+      console.log('Fetched servants:', mappedData);
+      setServants(mappedData);
     } catch (err) {
       console.error('[ServantsPage] load error:', err);
       setError('تعذّر تحميل قائمة الخدام. يرجى المحاولة مرة أخرى.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  function canDelete(targetProfile) {
+    if (!currentProfile) return false;
+    if (targetProfile.id === currentProfile.id) return false;
+    if (currentProfile.role === 'SERVANT') return false;
+    if (currentProfile.role === 'ADMIN' || currentProfile.role === 'GENERAL_SECRETARIAT') return true;
+    if (currentProfile.role === 'SERVICE_HEAD') {
+        if (targetProfile.role !== 'SERVANT') return false;
+        const myGrades = Array.isArray(currentProfile.assigned_grades) ? currentProfile.assigned_grades : (currentProfile.assigned_grade ? [currentProfile.assigned_grade] : []);
+        return myGrades.includes(targetProfile.assigned_grade);
+    }
+    return false;
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteModal.id) return;
+    setDeleting(true);
+    try {
+      console.log('Deleting servant id:', deleteModal.id);
+      await deleteServantProfile(deleteModal.id);
+      setServants(prev => prev.filter(s => s.id !== deleteModal.id));
+      setDeleteModal({ show: false, id: null });
+      setDeleteSuccessMsg('تم حذف الخادم بنجاح');
+      setTimeout(() => setDeleteSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error('Delete servant error:', err);
+      alert('حدث خطأ أثناء الحذف: ' + err.message);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -238,8 +324,8 @@ export default function ServantsPage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6', direction: 'rtl',
               }}>
-                {['الاسم', 'الدور', 'المرحلة المسؤولة', 'تاريخ الإضافة'].map((h, i) => (
-                  <p key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
+                {['الاسم', 'الدور', 'المرحلة المسؤولة', 'الحالة', 'تاريخ الإضافة', ''].map((h, i) => (
+                  <p key={h + i} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
             )}
@@ -291,6 +377,16 @@ export default function ServantsPage() {
                     }}>
                       {s.roleLabel}
                     </span>
+
+                    {/* Actions */}
+                    {canDelete(s) && (
+                      <div onClick={e => e.stopPropagation()}>
+                        <RowActionsMenu
+                          onEdit={() => navigate(`/servants/${s.id}/edit`)}
+                          onDelete={() => setDeleteModal({ show: true, id: s.id })}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -317,7 +413,7 @@ export default function ServantsPage() {
                     <div style={{ textAlign: 'right' }}>
                       <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.full_name || '—'}</p>
                       <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>
-                        {s.assigned_gender ? s.assigned_gender : 'لا يوجد جنس محدد'}
+                        {s.displayGender}
                       </p>
                     </div>
                   </div>
@@ -340,8 +436,32 @@ export default function ServantsPage() {
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{s.stageDisplay}</p>
 
+                  {/* Status display */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700,
+                      color: s.displayStatus === 'نشط' ? '#16A34A' : '#DC2626',
+                      background: s.displayStatus === 'نشط' ? '#DCFCE7' : '#FEE2E2',
+                      padding: '3px 8px', borderRadius: '12px'
+                    }}>
+                      {s.displayStatus}
+                    </span>
+                  </div>
+
                   {/* Joined date */}
                   <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>{joinedDate}</p>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    {canDelete(s) && (
+                      <div onClick={e => e.stopPropagation()}>
+                        <RowActionsMenu
+                          onEdit={() => navigate(`/servants/${s.id}/edit`)}
+                          onDelete={() => setDeleteModal({ show: true, id: s.id })}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -371,6 +491,64 @@ export default function ServantsPage() {
           </div>
         </>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.show && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          direction: 'rtl'
+        }}>
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '12px',
+            width: '90%', maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#111827', marginBottom: '8px' }}>تأكيد الحذف</h3>
+            <p style={{ fontSize: '14px', color: '#4B5563', marginBottom: '24px' }}>
+              هل أنت متأكد من حذف هذا الخادم؟
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                disabled={deleting}
+                onClick={() => setDeleteModal({ show: false, id: null })}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: '1px solid #D1D5DB',
+                  background: 'white', color: '#374151', fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'Cairo, sans-serif'
+                }}
+              >
+                إلغاء
+              </button>
+              <button
+                disabled={deleting}
+                onClick={handleDeleteConfirm}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: 'none',
+                  background: '#DC2626', color: 'white', fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'Cairo, sans-serif', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                {deleting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message Toast */}
+      {deleteSuccessMsg && (
+        <div style={{
+          position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          background: '#16A34A', color: 'white', padding: '12px 24px', borderRadius: '8px',
+          fontWeight: 700, fontSize: '14px', zIndex: 1000, boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+        }}>
+          {deleteSuccessMsg}
+        </div>
+      )}
+
     </div>
   );
 }

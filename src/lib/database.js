@@ -311,7 +311,10 @@ export async function insertStudent(studentData) {
     parent_phone_2: studentData.parentPhone2 || null,
     address:       studentData.address       || null,
     nearest_church: studentData.nearestChurch || null,
-    servant:       studentData.servant       || null,
+    // Store the servant's full_name for display (backward-compat with text column).
+    // servantName is resolved from the fetched servant list in the form;
+    // falls back to the raw servant value (UUID) if name wasn't resolved.
+    servant:       studentData.servantName || studentData.servant || null,
     status:        studentData.studentStatus || 'منتظم',
     medical_notes: studentData.medicalNotes  || null,
     hobbies:       hobbiesList,
@@ -319,7 +322,7 @@ export async function insertStudent(studentData) {
     avatar_color:  avatarColor,
     notes:         studentData.notes         || null,
   };
-  // ⛔ NOT sent: attendance_rate, last_attendance, grade, grade_id — not real DB columns
+  // ⛔ NOT sent: attendance_rate, last_attendance, grade_id — not real DB columns
 
   console.log('[insertStudent] payload →', row);
   const { data, error } = await supabase.from('students').insert(row).select().single();
@@ -1213,4 +1216,153 @@ export async function fetchPointsForStudents(studentIds) {
     .in('student_id', studentIds);
   if (error) { console.warn('[fetchPointsForStudents] error:', error.message); return {}; }
   return Object.fromEntries((data || []).map(r => [r.student_id, r.total_points ?? 0]));
+}
+
+// ─── SERVANT ASSIGNMENT HELPERS ───────────────────────────────────────────────
+
+/**
+ * Normalize an Arabic text string for fuzzy comparison.
+ * - Trims whitespace
+ * - Collapses multiple spaces into one
+ * - Unifies alef variants (أ إ آ → ا)
+ * - Unifies teh marbuta (ة → ه) — optional, kept for grade names
+ *
+ * This is needed because DB values may have "الإبتدائي" while UI uses "الابتدائي".
+ */
+function normalizeArabicText(str) {
+  if (!str) return '';
+  return str
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[أإآ]/g, 'ا');
+}
+
+/**
+ * Check if a servant's status should be considered active.
+ * Accepts: null, undefined, 'نشط', 'active'
+ * Rejects: 'غير نشط', 'inactive', any other explicit non-active value
+ */
+function isActiveServant(status) {
+  if (!status) return true; // NULL → include
+  const normalized = status.trim().toLowerCase();
+  if (normalized === 'نشط' || normalized === 'active') return true;
+  return false; // explicitly inactive
+}
+
+/**
+ * Fetch servants from profiles who can be assigned to a student of a given grade/gender.
+ *
+ * Filtering logic (all done client-side after a broad profiles fetch):
+ *   - role = 'SERVANT'
+ *   - assigned_grade matches the student's grade label (Arabic, normalized)
+ *   - assigned_gender: if NULL/empty on the servant, include them; if set, must match
+ *   - status: NULL → include; 'نشط'/'active' → include; everything else → exclude
+ *
+ * Role-based scope for the calling user:
+ *   - ADMIN / GENERAL_SECRETARIAT → all matching servants
+ *   - SERVICE_HEAD → servants whose assigned_grade overlaps their assigned_grades
+ *   - SERVANT → the query still runs; the current servant can appear for their own grade
+ *              (they should be able to add a student in their own grade/gender and see themselves)
+ *
+ * @param {object} params
+ * @param {string}  params.grade          Arabic grade label (e.g. 'الخامس الابتدائي')
+ * @param {string}  params.gender         Student gender: 'ذكر' | 'أنثى'
+ * @param {object}  [params.callerProfile] The logged-in user's profile (for scope)
+ * @returns {Promise<Array<{ id, full_name, assigned_grade, assigned_gender }>>}
+ */
+export async function fetchServantsForStudentAssignment({ grade, gender, callerProfile } = {}) {
+  if (!grade) return [];
+
+  const normGrade  = normalizeArabicText(grade);
+  const normGender = gender ? gender.trim() : null;
+  const role       = callerProfile?.role;
+
+  const selectedGrade  = grade;
+  const selectedGender = gender;
+
+  console.log('Responsible servant fetch params:', { selectedGrade, selectedGender });
+  console.log('Current profile:', callerProfile);
+
+  // Fetch ALL servants from profiles (broad query — filtering done client-side
+  // so Arabic normalization can be applied safely).
+  // RLS SELECT policy must be: using(true) for 'authenticated' role.
+  // If you see only 1 result here, the Supabase RLS SELECT policy is too restrictive.
+  // Run: supabase/migrations/fix_profiles_select_rls.sql to fix it.
+  const { data: rawServants, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role, assigned_grade, assigned_gender, status, email')
+    .eq('role', 'SERVANT')
+    .order('full_name', { ascending: true });
+
+  if (error) {
+    console.error('[fetchServantsForStudentAssignment] Supabase query error:', error);
+    return [];
+  }
+
+  console.log('Raw profiles from servant query:', rawServants);
+
+  // ⚠️  RLS Warning: If rawServants has only 1 row (the current user), it means
+  //     the Supabase SELECT policy on profiles is too restrictive.
+  //     Fix: run supabase/migrations/fix_profiles_select_rls.sql in Supabase SQL Editor.
+  if (rawServants && rawServants.length <= 1) {
+    console.warn(
+      '[fetchServantsForStudentAssignment] ⚠️  Only', rawServants.length,
+      'servant profile(s) returned from Supabase.',
+      'If there should be more, your profiles table SELECT RLS policy may be too restrictive.',
+      'Run: supabase/migrations/fix_profiles_select_rls.sql'
+    );
+  }
+
+  let filteredServants = (rawServants || []).filter(s => {
+    // 1. Grade match (normalized Arabic comparison)
+    const servantGrade = normalizeArabicText(s.assigned_grade);
+    if (servantGrade !== normGrade) return false;
+
+    // 2. Gender: if servant has assigned_gender set, it must match; if null/empty → include
+    if (s.assigned_gender && s.assigned_gender.trim()) {
+      if (s.assigned_gender.trim() !== normGender) return false;
+    }
+
+    // 3. Status: null/undefined → active; 'نشط'/'active' → active; else → exclude
+    if (!isActiveServant(s.status)) return false;
+
+    return true;
+  });
+
+  // Role-based scope: SERVICE_HEAD can only see servants in their assigned grades
+  if (role === 'SERVICE_HEAD') {
+    const headGrades = Array.isArray(callerProfile.assigned_grades)
+      ? callerProfile.assigned_grades.map(normalizeArabicText)
+      : callerProfile.assigned_grade
+        ? [normalizeArabicText(callerProfile.assigned_grade)]
+        : [];
+    filteredServants = filteredServants.filter(s =>
+      headGrades.includes(normalizeArabicText(s.assigned_grade))
+    );
+  }
+
+  // NOTE: SERVANT role is NOT filtered here — a SERVANT should see ALL servants
+  // who serve the same grade/gender, NOT only themselves.
+
+  console.log('Filtered responsible servants count:', filteredServants.length);
+  console.log('Filtered responsible servants:', filteredServants.map(s => ({
+    id: s.id,
+    full_name: s.full_name,
+    assigned_grade: s.assigned_grade,
+    assigned_gender: s.assigned_gender,
+    status: s.status,
+  })));
+
+  return filteredServants;
+}
+
+/** Delete a servant profile */
+export async function deleteServantProfile(servantId) {
+  const { error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', servantId);
+
+  if (error) throw error;
+  return true;
 }

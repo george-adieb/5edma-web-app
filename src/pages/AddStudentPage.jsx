@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  User, Info, Save, Phone, Heart, MapPin, AlertCircle,
+  User, Info, Save, Phone, Heart, MapPin, AlertCircle, Loader2,
 } from 'lucide-react';
-import { insertStudent } from '../lib/database';
-import { GRADES } from '../data/constants';
+import { insertStudent, fetchServantsForStudentAssignment } from '../lib/database';
+import { useAuth } from '../contexts/AuthContext';
+import { GRADES, GRADE_LABEL_MAP } from '../data/constants';
 
 /* ─── Shared sub-components ─────────────────────────────── */
 
@@ -101,29 +102,105 @@ const RELATIONS = [
   { id: 'أخرى',   label: 'أخرى'    },
 ];
 
-const SERVANTS = [
-  { id: '', label: 'اختر الخادم' },
-  { id: 'mina',   label: 'أ. مينا كمال'    },
-  { id: 'bishoy', label: 'أ. بيشوي أنطون'  },
-  { id: 'marina', label: 'أ. مارينا يوسف'  },
-  { id: 'peter',  label: 'أ. بطرس جرجس'    },
-];
-
 const EMPTY = {
   fullName: '', nickname: '', gender: 'ذكر', birthDate: '', grade: '',
   school: '', parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '',
-  address: '', nearestChurch: '', servant: '', studentStatus: 'منتظم',
+  address: '', nearestChurch: '', servant: '', servantName: '', studentStatus: 'منتظم',
   notes: '', medicalNotes: '', hobbies: '',
 };
 
 export default function AddStudentPage() {
   const navigate = useNavigate();
-  const [form,        setForm]        = useState(EMPTY);
+  const { profile } = useAuth();
+
+  // ── Compute allowed grades based on role ──────────────────────────
+  // SERVANT  → only their single assigned_grade
+  // SERVICE_HEAD → their assigned_grades array
+  // ADMIN / GENERAL_SECRETARIAT / null → all grades
+  const allowedGrades = (() => {
+    if (!profile) return GRADES.filter(g => g.id); // all (non-placeholder)
+    if (profile.role === 'SERVANT') {
+      // Map the Arabic label back to a grade ID
+      const matchedGrade = GRADES.find(g => g.label === profile.assigned_grade);
+      return matchedGrade ? [matchedGrade] : [];
+    }
+    if (profile.role === 'SERVICE_HEAD') {
+      const allowedLabels = Array.isArray(profile.assigned_grades)
+        ? profile.assigned_grades
+        : profile.assigned_grade ? [profile.assigned_grade] : [];
+      return GRADES.filter(g => g.id && allowedLabels.includes(g.label));
+    }
+    return GRADES.filter(g => g.id); // ADMIN — all
+  })();
+
+  console.log('Current profile:', profile);
+  console.log('Allowed grades for current user:', allowedGrades.map(g => g.label));
+
+  // ── Build initial form — auto-select grade/gender for SERVANT ─────
+  const initialForm = (() => {
+    const base = { ...EMPTY };
+    if (profile?.role === 'SERVANT') {
+      const matchedGrade = GRADES.find(g => g.label === profile.assigned_grade);
+      if (matchedGrade) base.grade = matchedGrade.id;
+      if (profile.assigned_gender) base.gender = profile.assigned_gender;
+    }
+    return base;
+  })();
+
+  const [form,        setForm]        = useState(initialForm);
   const [errors,      setErrors]      = useState({});
   const [saved,       setSaved]       = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Servant dropdown state
+  const [servants,        setServants]        = useState([]);
+  const [servantsLoading, setServantsLoading] = useState(false);
+
   const age = calcAge(form.birthDate);
+
+  // ── Re-initialise grade/gender when profile first loads ───────────
+  // (profile may be null on first render, then arrive asynchronously)
+  useEffect(() => {
+    if (!profile) return;
+    setForm(prev => {
+      // Only auto-fill if grade isn't already set (avoid overwriting user choice)
+      if (prev.grade) return prev;
+      const base = { ...prev };
+      if (profile.role === 'SERVANT') {
+        const matchedGrade = GRADES.find(g => g.label === profile.assigned_grade);
+        if (matchedGrade) base.grade = matchedGrade.id;
+        if (profile.assigned_gender) base.gender = profile.assigned_gender;
+      }
+      return base;
+    });
+  }, [profile]);
+
+  // ── Reload servant list whenever grade or gender changes ──────────
+  useEffect(() => {
+    if (!form.grade) {
+      setServants([]);
+      return;
+    }
+    // Convert grade ID → Arabic label (what profiles.assigned_grade stores)
+    const gradeLabel = GRADE_LABEL_MAP[form.grade] || form.grade;
+
+    console.log('Selected student grade:', form.grade, '→', gradeLabel);
+    console.log('Selected student gender:', form.gender);
+
+    setServantsLoading(true);
+    fetchServantsForStudentAssignment({
+      grade: gradeLabel,
+      gender: form.gender,
+      callerProfile: profile,
+    })
+      .then(list => {
+        console.log('Filtered responsible servants:', list);
+        setServants(list);
+      })
+      .catch(err => { console.error('[AddStudentPage] servants fetch error:', err); setServants([]); })
+      .finally(() => setServantsLoading(false));
+  }, [form.grade, form.gender, profile]);
 
   function set(field, val) {
     setForm(p => ({ ...p, [field]: val }));
@@ -155,10 +232,16 @@ export default function AddStudentPage() {
     setSaving(true);
     setSubmitError('');
     try {
-      const newStudent = await insertStudent(form);
+      // Resolve servant full_name for backward-compat storage
+      const selectedServant = servants.find(s => s.id === form.servant);
+      const formWithServantName = {
+        ...form,
+        servantName: selectedServant?.full_name || form.servant,
+      };
+      const newStudent = await insertStudent(formWithServantName);
       console.log('[AddStudentPage] insert success →', newStudent);
       if (addAnother) {
-        setForm(EMPTY); setErrors({});
+        setForm(initialForm); setErrors({});
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -248,30 +331,65 @@ export default function AddStudentPage() {
                   onBlur={e  => e.target.style.borderColor = '#E5E7EB'} />
               </FormGroup>
               <FormGroup label="النوع">
-                <div style={{ display: 'flex', gap: '10px', paddingTop: '2px' }}>
-                  {['ذكر', 'أنثى'].map(g => (
-                    <button key={g} type="button" onClick={() => set('gender', g)} style={{
-                      flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer',
-                      fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
-                      border: `2px solid ${form.gender === g ? '#8B1A1A' : '#E5E7EB'}`,
-                      background: form.gender === g ? '#8B1A1A' : 'white',
-                      color: form.gender === g ? 'white' : '#6B7280',
-                      transition: 'all 0.15s', minHeight: '42px',
-                    }}>{g}</button>
-                  ))}
-                </div>
+                {/* For SERVANT with assigned_gender: show locked display, not editable buttons */}
+                {profile?.role === 'SERVANT' && profile?.assigned_gender ? (
+                  <div style={{
+                    padding: '9px 12px', background: '#F9FAFB', borderRadius: '8px',
+                    border: '1.5px solid #F3F4F6', fontSize: '13px', textAlign: 'right',
+                    color: '#374151', fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                    minHeight: '42px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                    gap: '6px',
+                  }}>
+                    <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500 }}>محدد تلقائياً</span>
+                    {profile.assigned_gender}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '10px', paddingTop: '2px' }}>
+                    {['ذكر', 'أنثى'].map(g => (
+                      <button key={g} type="button" onClick={() => set('gender', g)} style={{
+                        flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer',
+                        fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
+                        border: `2px solid ${form.gender === g ? '#8B1A1A' : '#E5E7EB'}`,
+                        background: form.gender === g ? '#8B1A1A' : 'white',
+                        color: form.gender === g ? 'white' : '#6B7280',
+                        transition: 'all 0.15s', minHeight: '42px',
+                      }}>{g}</button>
+                    ))}
+                  </div>
+                )}
               </FormGroup>
             </div>
 
             <div className="grid-form-2">
               <div data-has-error={!!errors.grade}>
                 <FormGroup label="المرحلة الدراسية" error={errors.grade}>
-                  <select value={form.grade} onChange={e => set('grade', e.target.value)}
-                    style={SEL(errors.grade)}
-                    onFocus={e => e.target.style.borderColor = '#8B1A1A'}
-                    onBlur={e  => e.target.style.borderColor = errors.grade ? '#FCA5A5' : '#E5E7EB'}>
-                    {GRADES.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                  </select>
+                  {/* SERVANT: grade is locked to their assigned_grade */}
+                  {profile?.role === 'SERVANT' ? (
+                    <div style={{
+                      padding: '9px 12px', background: '#F9FAFB', borderRadius: '8px',
+                      border: '1.5px solid #F3F4F6', fontSize: '13px', textAlign: 'right',
+                      color: '#374151', fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                      minHeight: '42px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                      gap: '6px',
+                    }}>
+                      <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 500 }}>محدد تلقائياً</span>
+                      {profile.assigned_grade || '—'}
+                    </div>
+                  ) : (
+                    <select
+                      value={form.grade}
+                      onChange={e => {
+                        setForm(p => ({ ...p, grade: e.target.value, servant: '' }));
+                        if (errors.grade)   setErrors(p => ({ ...p, grade: '' }));
+                        if (errors.servant) setErrors(p => ({ ...p, servant: '' }));
+                      }}
+                      style={SEL(errors.grade)}
+                      onFocus={e => e.target.style.borderColor = '#8B1A1A'}
+                      onBlur={e  => e.target.style.borderColor = errors.grade ? '#FCA5A5' : '#E5E7EB'}>
+                      <option value="">اختر المرحلة</option>
+                      {allowedGrades.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                    </select>
+                  )}
                 </FormGroup>
               </div>
               <FormGroup label="العمر (محسوب)" optional>
@@ -395,12 +513,49 @@ export default function AddStudentPage() {
             </FormGroup>
             <div data-has-error={!!errors.servant}>
               <FormGroup label="الخادم المسؤول" error={errors.servant}>
-                <select value={form.servant} onChange={e => set('servant', e.target.value)}
-                  style={SEL(errors.servant)}
-                  onFocus={e => e.target.style.borderColor = '#8B1A1A'}
-                  onBlur={e  => e.target.style.borderColor = errors.servant ? '#FCA5A5' : '#E5E7EB'}>
-                  {SERVANTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={form.servant}
+                    onChange={e => set('servant', e.target.value)}
+                    disabled={!form.grade || servantsLoading}
+                    style={{
+                      ...SEL(errors.servant),
+                      opacity: !form.grade ? 0.55 : 1,
+                      cursor: !form.grade ? 'not-allowed' : 'pointer',
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#8B1A1A'}
+                    onBlur={e  => e.target.style.borderColor = errors.servant ? '#FCA5A5' : '#E5E7EB'}
+                  >
+                    {/* Placeholder option */}
+                    {servantsLoading ? (
+                      <option value="">جارٍ التحميل...</option>
+                    ) : !form.grade ? (
+                      <option value="">اختر المرحلة أولاً</option>
+                    ) : servants.length === 0 ? (
+                      <option value="">لا يوجد خدام متاحون لهذه المرحلة</option>
+                    ) : (
+                      <>
+                        <option value="">اختر الخادم المسؤول</option>
+                        {servants.map(s => (
+                          <option key={s.id} value={s.id}>{s.full_name}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  {servantsLoading && (
+                    <div style={{
+                      position: 'absolute', left: '10px', top: '50%',
+                      transform: 'translateY(-50%)', pointerEvents: 'none',
+                    }}>
+                      <Loader2 size={14} color="#8B1A1A" style={{ animation: 'spin 1s linear infinite' }} />
+                    </div>
+                  )}
+                </div>
+                {!form.grade && (
+                  <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px', textAlign: 'right' }}>
+                    حدّد المرحلة الدراسية أولاً لتظهر قائمة الخدام
+                  </p>
+                )}
               </FormGroup>
             </div>
             <FormGroup label="حالة المتابعة الأولية">
