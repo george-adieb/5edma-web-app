@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchStudents, fetchAttendanceForDate, saveAttendance, fetchLastAttendancesBeforeDate } from '../lib/database';
+import { fetchStudents, fetchAttendanceForDate, saveAttendance, fetchLastAttendancesBeforeDate, addAttendancePointsIfNeeded } from '../lib/database';
 import {
   getActiveFriday,
   getPreviousFriday,
@@ -124,6 +124,14 @@ export default function AttendancePage() {
     try {
       // Only save records for this servant's assigned students (scopedAtt)
       await saveAttendance(scopedAtt, selectedFriday);
+
+      // Award/reverse attendance points (+10 per حاضر student, deduplication built-in)
+      await addAttendancePointsIfNeeded({
+        attendance: scopedAtt,
+        attendanceDate: selectedFriday,
+        createdBy: profile?.id,
+      });
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Phone, Share2, Edit3, Plus, Heart, Loader2 } from 'lucide-react';
+import { Phone, Share2, Edit3, Plus, Heart, Loader2, Star } from 'lucide-react';
 import {
   fetchStudent,
   fetchStudentAttendance,
@@ -8,7 +8,10 @@ import {
   fetchFollowUpByStudentId,
   saveFollowUpLog,
   updateFollowUpLog,
+  fetchStudentPointsLogs,
+  fetchStudentPointsSummary,
 } from '../lib/database';
+import AddPointsModal from '../components/AddPointsModal';
 
 const ATT_STYLE = {
   حاضر:  { bg: '#DCFCE7', color: '#16A34A', label: '✓' },
@@ -38,6 +41,12 @@ export default function StudentProfilePage() {
   const [followUp,         setFollowUp]         = useState(null);
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState(null);
+
+  // Points state
+  const [totalPoints,      setTotalPoints]      = useState(0);
+  const [pointsLogs,       setPointsLogs]       = useState([]);
+  const [showAllPoints,    setShowAllPoints]    = useState(false);
+  const [showAddPoints,    setShowAddPoints]    = useState(false);
 
   // Note form state
   const [showNoteForm,   setShowNoteForm]   = useState(false);
@@ -74,6 +83,29 @@ export default function StudentProfilePage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Load points separately (non-blocking)
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      fetchStudentPointsSummary(id),
+      fetchStudentPointsLogs(id, 20),
+    ]).then(([summary, logs]) => {
+      setTotalPoints(summary[id] ?? 0);
+      setPointsLogs(logs);
+    }).catch(err => console.warn('[StudentProfile] points load error:', err));
+  }, [id]);
+
+  async function refreshPoints() {
+    try {
+      const [summary, logs] = await Promise.all([
+        fetchStudentPointsSummary(id),
+        fetchStudentPointsLogs(id, 20),
+      ]);
+      setTotalPoints(summary[id] ?? 0);
+      setPointsLogs(logs);
+    } catch (e) { console.warn('refresh points error', e); }
+  }
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -181,6 +213,7 @@ export default function StudentProfilePage() {
   }
 
   return (
+    <>
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -385,6 +418,82 @@ export default function StudentProfilePage() {
               </button>
             </div>
           </div>
+
+          {/* ── Points card ── */}
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '16px 18px',
+            border: '1.5px solid #FDE68A', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px' }}>⭐</span>
+                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>النقاط</h3>
+              </div>
+              <button
+                onClick={() => setShowAddPoints(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  padding: '6px 12px', borderRadius: '8px',
+                  background: '#8B1A1A', color: 'white', border: 'none',
+                  fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '11px', cursor: 'pointer',
+                }}
+              >
+                <Plus size={12} /> إضافة نقاط
+              </button>
+            </div>
+
+            {/* Total points display */}
+            <div style={{
+              background: 'linear-gradient(135deg, #FEF3C7, #FFFBEB)',
+              borderRadius: '10px', padding: '14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '12px', border: '1px solid #FDE68A',
+            }}>
+              <div>
+                <p style={{ fontSize: '11px', color: '#92400E', fontWeight: 600 }}>إجمالي النقاط</p>
+                <p style={{ fontSize: '36px', fontWeight: 900, color: '#92400E', lineHeight: 1 }}>{totalPoints}</p>
+              </div>
+              <Star size={32} fill="#F59E0B" color="#F59E0B" style={{ opacity: 0.6 }} />
+            </div>
+
+            {/* Recent logs */}
+            {pointsLogs.length === 0 ? (
+              <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center', padding: '8px 0' }}>لا توجد نقاط مسجلة</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {(showAllPoints ? pointsLogs : pointsLogs.slice(0, 4)).map(log => (
+                  <div key={log.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 10px', borderRadius: '8px', background: '#F9FAFB',
+                    border: '1px solid #F3F4F6',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.reason}</p>
+                      <p style={{ fontSize: '10px', color: '#9CA3AF' }}>{log.time}</p>
+                    </div>
+                    <span style={{
+                      fontSize: '14px', fontWeight: 900, flexShrink: 0, marginRight: '8px',
+                      color: log.points > 0 ? '#16A34A' : '#DC2626',
+                    }}>
+                      {log.points > 0 ? '+' : ''}{log.points}
+                    </span>
+                  </div>
+                ))}
+                {pointsLogs.length > 4 && (
+                  <button
+                    onClick={() => setShowAllPoints(p => !p)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontSize: '11px', fontWeight: 700, color: '#8B1A1A',
+                      fontFamily: 'Cairo, sans-serif', padding: '4px 0', textAlign: 'center',
+                    }}
+                  >
+                    {showAllPoints ? 'عرض أقل' : `عرض الكل (${pointsLogs.length})`}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* LEFT: attendance + notes */}
@@ -586,5 +695,14 @@ export default function StudentProfilePage() {
         </div>
       </div>
     </div>
+
+    {/* Add Points Modal */}
+    <AddPointsModal
+      isOpen={showAddPoints}
+      onClose={() => setShowAddPoints(false)}
+      student={student}
+      onSuccess={refreshPoints}
+    />
+    </>
   );
 }

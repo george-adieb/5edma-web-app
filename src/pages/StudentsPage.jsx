@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MoreVertical, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchStudents, deleteStudent } from '../lib/database';
+import { fetchStudents, deleteStudent, fetchPointsForStudents } from '../lib/database';
 import RowActionsMenu from '../components/RowActionsMenu';
 import { GRADE_LABEL_MAP } from '../data/constants';
 import StudentFilterBar, { useStudentFilters } from '../components/StudentFilterBar';
@@ -14,8 +14,8 @@ const STATUS_BADGE = {
   'يحتاج افتقاد': { bg: '#FEE2E2', color: '#DC2626', dot: '#DC2626' },
 };
 
-// Desktop: 6 columns
-const COLS = '2.5fr 1fr 1.2fr 1fr 1.2fr 0.5fr';
+// Desktop: 7 columns (added النقاط)
+const COLS = '2.5fr 1fr 1.2fr 1fr 1fr 1.2fr 0.5fr';
 
 export default function StudentsPage() {
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export default function StudentsPage() {
   const [status,   setStatus]   = useState('all');
   const [page,     setPage]     = useState(1);
   const [perPage,  setPerPage]  = useState(10);
+  const [pointsMap, setPointsMap] = useState({});
 
   const { search, setSearch, stage, setStage, year, setYear, stageConfig, baseFiltered, clearFilters } = useStudentFilters(students);
 
@@ -39,6 +40,15 @@ export default function StudentsPage() {
       .catch(err  => { console.error(err); setError('تعذّر تحميل بيانات المخدومين'); })
       .finally(() => setLoading(false));
   }, [profile]);
+
+  // Load points for all students (non-blocking, runs after students loaded)
+  useEffect(() => {
+    if (students.length === 0) return;
+    const ids = students.map(s => s.id);
+    fetchPointsForStudents(ids)
+      .then(map => setPointsMap(map))
+      .catch(err => console.warn('[StudentsPage] points load error:', err));
+  }, [students]);
 
   const filtered   = baseFiltered.filter(s => status === 'all' || s.status === status);
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
@@ -133,7 +143,7 @@ export default function StudentsPage() {
                 padding: '10px 16px', background: '#FAFAFA',
                 borderBottom: '1.5px solid #F3F4F6', direction: 'rtl',
               }}>
-                {['المخدوم', 'الكود', 'المرحلة', 'الحالة', 'آخر حضور', ''].map((h, i) => (
+                {['المخدوم', 'الكود', 'المرحلة', 'الحالة', 'إجمالي النقاط', 'آخر حضور', ''].map((h, i) => (
                   <p key={i} style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', textAlign: i === 0 ? 'right' : 'center' }}>{h}</p>
                 ))}
               </div>
@@ -177,6 +187,18 @@ export default function StudentsPage() {
                       <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
                       <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '2px' }}>{gradeLabel}</p>
                     </div>
+
+                    {/* Points badge */}
+                    {pointsMap[s.id] > 0 && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                        padding: '3px 8px', borderRadius: '20px', flexShrink: 0,
+                        fontSize: '11px', fontWeight: 800,
+                        background: '#FEF3C7', color: '#92400E',
+                      }}>
+                        ⭐ {pointsMap[s.id]}
+                      </span>
+                    )}
 
                     {/* Status badge */}
                     <span style={{
@@ -237,6 +259,18 @@ export default function StudentsPage() {
                     }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: badge.dot, flexShrink: 0 }} />
                       {s.status}
+                    </span>
+                  </div>
+                  {/* Points badge */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      padding: '4px 10px', borderRadius: '20px',
+                      fontSize: '12px', fontWeight: 800,
+                      background: (pointsMap[s.id] || 0) > 0 ? '#FEF3C7' : '#F9FAFB',
+                      color: (pointsMap[s.id] || 0) > 0 ? '#92400E' : '#9CA3AF',
+                    }}>
+                      {(pointsMap[s.id] || 0) > 0 ? '⭐ ' : ''}{pointsMap[s.id] || 0}
                     </span>
                   </div>
                   <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center' }}>{s.last_attendance || s.lastAttendance || '—'}</p>

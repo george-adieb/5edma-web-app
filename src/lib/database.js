@@ -1042,3 +1042,175 @@ export async function performGlobalSearch(query, context = 'all') {
   return finalItems;
 }
 
+
+// ─── POINTS SYSTEM ────────────────────────────────────────────────────────────
+
+/**
+ * Fetch the total points summary for one or multiple students.
+ * @param {string|string[]|null} studentId  Single UUID, array of UUIDs, or null for all.
+ * @returns {Promise<{ [studentId]: number }>}  Map of studentId → totalPoints
+ */
+export async function fetchStudentPointsSummary(studentId = null) {
+  let query = supabase
+    .from('student_points_summary')
+    .select('student_id, total_points');
+  if (studentId) {
+    if (Array.isArray(studentId)) {
+      query = query.in('student_id', studentId);
+    } else {
+      query = query.eq('student_id', studentId);
+    }
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.warn('[fetchStudentPointsSummary] error:', error.message);
+    return {};
+  }
+  return Object.fromEntries((data || []).map(r => [r.student_id, r.total_points ?? 0]));
+}
+
+/**
+ * Fetch the full points history log for a single student.
+ * @param {string} studentId   Student UUID
+ * @param {number} [limit=50]  Maximum records to return
+ */
+export async function fetchStudentPointsLogs(studentId, limit = 50) {
+  const { data, error } = await supabase
+    .from('student_points_logs')
+    .select(`
+      id, student_id, points, reason, source,
+      attendance_record_id, created_at,
+      profiles!created_by (full_name)
+    `)
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[fetchStudentPointsLogs] error:', error);
+    throw error;
+  }
+  return (data || []).map(log => ({
+    ...log,
+    created_by_name: log.profiles?.full_name || '—',
+    time: timeAgo(log.created_at),
+  }));
+}
+
+/**
+ * Manually add points to a student.
+ * source must be 'activity' | 'manual' | 'correction'
+ * For 'correction' source, points may be negative.
+ */
+export async function addStudentPoints({ studentId, points, reason, source, createdBy }) {
+  if (!studentId) throw new Error('studentId is required');
+  if (!reason?.trim()) throw new Error('reason is required');
+  if (points === undefined || points === null) throw new Error('points is required');
+  if (!['activity', 'manual', 'correction'].includes(source))
+    throw new Error(`Invalid source: ${source}`);
+  if (source !== 'correction' && points <= 0)
+    throw new Error('النقاط يجب أن تكون أكبر من صفر');
+
+  const payload = { student_id: studentId, points, reason: reason.trim(), source };
+  if (createdBy) payload.created_by = createdBy;
+
+  console.log('[addStudentPoints] payload →', payload);
+  const { data, error } = await supabase
+    .from('student_points_logs')
+    .insert(payload)
+    .select()
+    .single();
+  if (error) { console.error('[addStudentPoints] error:', error); throw error; }
+  return data;
+}
+
+/**
+ * Add attendance points (+10) for every student marked "حاضر" in an attendance save.
+ *
+ * Duplicate prevention: checks if a log already exists for the same attendance_record_id
+ * with source='attendance'. If it exists, skips insertion.
+ *
+ * Reversal behaviour: If a student previously received +10 (حاضر) and is now saved as
+ * غائب/معتذر, a -10 correction entry is inserted to reverse the award. The original log
+ * is kept for a full audit trail.
+ *
+ * @param {object}  attendance     { [studentId]: 'حاضر'|'غائب'|'معتذر' }
+ * @param {string}  attendanceDate ISO date 'YYYY-MM-DD'
+ * @param {string}  createdBy      Profile UUID of the saving servant
+ */
+export async function addAttendancePointsIfNeeded({ attendance, attendanceDate, createdBy }) {
+  if (!attendance || Object.keys(attendance).length === 0) return;
+  const studentIds = Object.keys(attendance).filter(id => attendance[id]);
+  if (studentIds.length === 0) return;
+
+  // 1. Fetch the attendance_records so we have their UUIDs
+  const { data: records, error: recErr } = await supabase
+    .from('attendance_records')
+    .select('id, student_id, status')
+    .eq('attendance_date', attendanceDate)
+    .in('student_id', studentIds);
+  if (recErr) { console.error('[addAttendancePointsIfNeeded] records error:', recErr); return; }
+
+  const recordMap = Object.fromEntries((records || []).map(r => [String(r.student_id), r]));
+  const recordIds = (records || []).map(r => r.id);
+  if (recordIds.length === 0) return;
+
+  // 2. Check which records already have attendance-source point logs
+  const { data: existingLogs, error: logErr } = await supabase
+    .from('student_points_logs')
+    .select('attendance_record_id, student_id, points')
+    .in('attendance_record_id', recordIds)
+    .eq('source', 'attendance');
+  if (logErr) { console.error('[addAttendancePointsIfNeeded] logs error:', logErr); return; }
+
+  const alreadyLogged = new Set((existingLogs || []).map(l => l.attendance_record_id));
+  const existingLogByRecordId = Object.fromEntries((existingLogs || []).map(l => [l.attendance_record_id, l]));
+
+  // 3. Build inserts and reversals
+  const inserts = [];
+  for (const studentId of studentIds) {
+    const record = recordMap[String(studentId)];
+    if (!record) continue;
+    const currentStatus = attendance[studentId];
+    const existingLog   = existingLogByRecordId[record.id];
+
+    if (currentStatus === 'حاضر') {
+      if (!alreadyLogged.has(record.id)) {
+        const entry = {
+          student_id: studentId, points: 10,
+          reason: 'حضور اجتماع الخدمة', source: 'attendance',
+          attendance_record_id: record.id,
+        };
+        if (createdBy) entry.created_by = createdBy;
+        inserts.push(entry);
+      }
+    } else if (existingLog && existingLog.points > 0) {
+      // Was previously حاضر → reverse the award
+      const reversal = {
+        student_id: studentId, points: -10,
+        reason: 'تصحيح: تغيير حالة الحضور', source: 'correction',
+        attendance_record_id: record.id,
+      };
+      if (createdBy) reversal.created_by = createdBy;
+      inserts.push(reversal);
+    }
+  }
+
+  if (inserts.length === 0) return;
+  console.log(`[addAttendancePointsIfNeeded] Inserting ${inserts.length} entries`);
+  const { error: insertErr } = await supabase.from('student_points_logs').insert(inserts);
+  if (insertErr) console.error('[addAttendancePointsIfNeeded] insert error:', insertErr);
+}
+
+/**
+ * Fetch total points for a batch of students.
+ * Returns { [studentId]: totalPoints } — missing students default to 0.
+ */
+export async function fetchPointsForStudents(studentIds) {
+  if (!studentIds || studentIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('student_points_summary')
+    .select('student_id, total_points')
+    .in('student_id', studentIds);
+  if (error) { console.warn('[fetchPointsForStudents] error:', error.message); return {}; }
+  return Object.fromEntries((data || []).map(r => [r.student_id, r.total_points ?? 0]));
+}
