@@ -21,6 +21,14 @@ const REASON_SUGGESTIONS = [
   'تعاون مع الفريق',
 ];
 
+const DEDUCT_REASON_SUGGESTIONS = [
+  'سلوك غير مناسب',
+  'غياب بدون عذر',
+  'لم يلتزم بالنظام',
+  'تصحيح نقاط',
+  'تم تسجيل نقاط بالخطأ'
+];
+
 /**
  * AddPointsModal
  *
@@ -32,6 +40,7 @@ const REASON_SUGGESTIONS = [
 export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) {
   const { profile } = useAuth();
 
+  const [mode,           setMode]           = useState('add');
   const [selectedPoints, setSelectedPoints] = useState(null);
   const [customPoints,   setCustomPoints]   = useState('');
   const [useCustom,      setUseCustom]      = useState(false);
@@ -44,6 +53,7 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
   // Reset state whenever modal opens
   useEffect(() => {
     if (isOpen) {
+      setMode('add');
       setSelectedPoints(null);
       setCustomPoints('');
       setUseCustom(false);
@@ -57,14 +67,15 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
 
   if (!isOpen) return null;
 
-  const effectivePoints = useCustom
+  const amount = useCustom
     ? (parseInt(customPoints, 10) || 0)
     : (selectedPoints || 0);
 
+  const effectivePoints = mode === 'add' ? amount : -amount;
+
   const isValid =
-    effectivePoints !== 0 &&
-    reason.trim().length > 0 &&
-    (source === 'correction' ? true : effectivePoints > 0);
+    amount > 0 &&
+    reason.trim().length > 0;
 
   async function handleSubmit() {
     if (!isValid) return;
@@ -135,7 +146,7 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
               </div>
               <div>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
-                  إضافة نقاط لـ
+                  {mode === 'add' ? 'إضافة نقاط لـ' : 'خصم نقاط من'}
                 </p>
                 <p style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>
                   {student?.name || '—'}
@@ -179,6 +190,43 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
 
             {!success && (
               <>
+                {/* Mode segmented control */}
+                <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: '10px', padding: '4px', marginBottom: '20px' }}>
+                  <button
+                    onClick={() => {
+                      setMode('add');
+                      if (source === 'correction') setSource('activity');
+                      setReason('');
+                    }}
+                    style={{
+                      flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
+                      fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                      background: mode === 'add' ? 'white' : 'transparent',
+                      color: mode === 'add' ? '#16A34A' : '#6B7280',
+                      boxShadow: mode === 'add' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    إضافة نقاط
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMode('deduct');
+                      setReason('');
+                    }}
+                    style={{
+                      flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
+                      fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                      background: mode === 'deduct' ? 'white' : 'transparent',
+                      color: mode === 'deduct' ? '#DC2626' : '#6B7280',
+                      boxShadow: mode === 'deduct' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    خصم نقاط
+                  </button>
+                </div>
+
                 {/* 1. Points selector */}
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', display: 'block', marginBottom: '10px' }}>
@@ -195,14 +243,14 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
                           padding: '10px 6px', borderRadius: '10px', cursor: 'pointer',
                           fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: '16px',
                           border: '2px solid',
-                          borderColor: (!useCustom && selectedPoints === p) ? '#8B1A1A' : '#E5E7EB',
-                          background: (!useCustom && selectedPoints === p) ? '#FEF2F2' : 'white',
-                          color: (!useCustom && selectedPoints === p) ? '#8B1A1A' : '#6B7280',
+                          borderColor: (!useCustom && selectedPoints === p) ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#E5E7EB',
+                          background: (!useCustom && selectedPoints === p) ? (mode === 'add' ? '#F0FDF4' : '#FEF2F2') : 'white',
+                          color: (!useCustom && selectedPoints === p) ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#6B7280',
                           transition: 'all 0.15s',
                         }}
                       >
                         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                          <Star size={12} fill={(!useCustom && selectedPoints === p) ? '#8B1A1A' : 'none'} color={(!useCustom && selectedPoints === p) ? '#8B1A1A' : '#D1D5DB'} />
+                          <Star size={12} fill={(!useCustom && selectedPoints === p) ? (mode === 'add' ? '#16A34A' : '#DC2626') : 'none'} color={(!useCustom && selectedPoints === p) ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#D1D5DB'} />
                           {p}
                         </span>
                       </button>
@@ -216,9 +264,9 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
                       width: '100%', padding: '9px', borderRadius: '9px', cursor: 'pointer',
                       fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12px',
                       border: '1.5px dashed',
-                      borderColor: useCustom ? '#8B1A1A' : '#D1D5DB',
-                      background: useCustom ? '#FEF2F2' : '#F9FAFB',
-                      color: useCustom ? '#8B1A1A' : '#9CA3AF',
+                      borderColor: useCustom ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#D1D5DB',
+                      background: useCustom ? (mode === 'add' ? '#F0FDF4' : '#FEF2F2') : '#F9FAFB',
+                      color: useCustom ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#9CA3AF',
                       transition: 'all 0.15s',
                     }}
                   >
@@ -229,13 +277,19 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
                     <input
                       type="number"
                       value={customPoints}
-                      onChange={e => setCustomPoints(e.target.value)}
-                      placeholder={source === 'correction' ? 'أدخل قيمة موجبة أو سالبة' : 'أدخل عدد النقاط'}
-                      min={source === 'correction' ? undefined : 1}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '' || Number(val) >= 0) {
+                          setCustomPoints(val);
+                        }
+                      }}
+                      placeholder="أدخل عدد النقاط (قيمة موجبة)"
+                      min={1}
                       autoFocus
                       style={{
                         marginTop: '8px', width: '100%', padding: '10px 12px',
-                        borderRadius: '9px', border: '1.5px solid #8B1A1A',
+                        borderRadius: '9px', border: '1.5px solid',
+                        borderColor: mode === 'add' ? '#16A34A' : '#DC2626',
                         fontFamily: 'Cairo, sans-serif', fontSize: '14px', fontWeight: 700,
                         color: '#111827', outline: 'none', textAlign: 'center',
                         boxSizing: 'border-box',
@@ -280,17 +334,22 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
 
                   {/* Reason suggestions */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                    {REASON_SUGGESTIONS.map(s => (
+                    {(mode === 'add' ? REASON_SUGGESTIONS : DEDUCT_REASON_SUGGESTIONS).map(s => (
                       <button
                         key={s}
-                        onClick={() => setReason(s)}
+                        onClick={() => {
+                          setReason(s);
+                          if (mode === 'deduct' && s === 'تصحيح نقاط') {
+                            setSource('correction');
+                          }
+                        }}
                         style={{
                           padding: '5px 10px', borderRadius: '20px', cursor: 'pointer',
                           fontFamily: 'Cairo, sans-serif', fontWeight: 600, fontSize: '11px',
                           border: '1px solid',
-                          borderColor: reason === s ? '#8B1A1A' : '#E5E7EB',
-                          background: reason === s ? '#FEF2F2' : '#F9FAFB',
-                          color: reason === s ? '#8B1A1A' : '#6B7280',
+                          borderColor: reason === s ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#E5E7EB',
+                          background: reason === s ? (mode === 'add' ? '#F0FDF4' : '#FEF2F2') : '#F9FAFB',
+                          color: reason === s ? (mode === 'add' ? '#16A34A' : '#DC2626') : '#6B7280',
                           transition: 'all 0.12s',
                         }}
                       >
@@ -374,7 +433,7 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
                       fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
                       border: 'none',
                       background: isValid && !saving
-                        ? 'linear-gradient(135deg, #8B1A1A, #B52626)'
+                        ? (mode === 'add' ? 'linear-gradient(135deg, #16A34A, #15803D)' : 'linear-gradient(135deg, #DC2626, #991B1B)')
                         : '#D1D5DB',
                       color: 'white',
                       opacity: isValid && !saving ? 1 : 0.7,
@@ -384,7 +443,7 @@ export default function AddPointsModal({ isOpen, onClose, student, onSuccess }) 
                   >
                     {saving
                       ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> جاري الحفظ...</>
-                      : <><Star size={14} /> إضافة {effectivePoints > 0 ? effectivePoints : '—'} نقطة</>
+                      : <><Star size={14} /> {mode === 'add' ? 'إضافة' : 'خصم'} {amount > 0 ? amount : '—'} نقطة</>
                     }
                   </button>
                 </div>

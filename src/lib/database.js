@@ -1110,8 +1110,8 @@ export async function addStudentPoints({ studentId, points, reason, source, crea
   if (points === undefined || points === null) throw new Error('points is required');
   if (!['activity', 'manual', 'correction'].includes(source))
     throw new Error(`Invalid source: ${source}`);
-  if (source !== 'correction' && points <= 0)
-    throw new Error('النقاط يجب أن تكون أكبر من صفر');
+  if (points === 0)
+    throw new Error('النقاط لا يمكن أن تكون صفر');
 
   const payload = { student_id: studentId, points, reason: reason.trim(), source };
   if (createdBy) payload.created_by = createdBy;

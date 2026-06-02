@@ -468,8 +468,20 @@ export default function StudentProfilePage() {
                     border: '1px solid #F3F4F6',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.reason}</p>
-                      <p style={{ fontSize: '10px', color: '#9CA3AF' }}>{log.time}</p>
+                      <p style={{ fontSize: '12px', fontWeight: 700, color: '#111827', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.reason}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: '#9CA3AF' }}>
+                        <span style={{
+                          padding: '2px 6px', borderRadius: '4px', fontWeight: 700,
+                          background: log.points > 0 ? '#DCFCE7' : '#FEE2E2',
+                          color: log.points > 0 ? '#16A34A' : '#DC2626'
+                        }}>
+                          {log.points > 0 ? 'إضافة' : 'خصم'}
+                        </span>
+                        <span>•</span>
+                        <span>{log.created_by_name}</span>
+                        <span>•</span>
+                        <span>{log.time}</span>
+                      </div>
                     </div>
                     <span style={{
                       fontSize: '14px', fontWeight: 900, flexShrink: 0, marginRight: '8px',
