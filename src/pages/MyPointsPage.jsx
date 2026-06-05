@@ -154,7 +154,7 @@ export default function MyPointsPage() {
               display: 'block', fontSize: '13px', fontWeight: 700,
               color: 'rgba(255,255,255,0.6)', marginBottom: '10px',
             }}>
-              كود الطالب
+              كود المخدوم
             </label>
 
             <div style={{ position: 'relative', marginBottom: '16px' }}>
@@ -163,7 +163,7 @@ export default function MyPointsPage() {
                 type="text"
                 value={code}
                 onChange={e => { setCode(e.target.value); setError(''); }}
-                placeholder="مثال: STD-4131"
+                placeholder="مثال: STD-1234"
                 autoComplete="off"
                 autoCapitalize="characters"
                 style={{
