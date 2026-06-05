@@ -11,6 +11,7 @@ import AddStudentPage from './pages/AddStudentPage';
 import EditStudentPage from './pages/EditStudentPage';
 import AddServantPage from './pages/AddServantPage';
 import LoginPage from './pages/LoginPage';
+import MyPointsPage from './pages/MyPointsPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -34,6 +35,10 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />
+  },
+  {
+    path: '/my-points',
+    element: <MyPointsPage />
   },
   {
     path: '/',

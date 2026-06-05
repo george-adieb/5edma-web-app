@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Phone, Share2, Edit3, Plus, Heart, Loader2, Star } from 'lucide-react';
+import { Phone, Share2, Edit3, Plus, Heart, Loader2, Star, Copy, CheckCheck } from 'lucide-react';
 import {
   fetchStudent,
   fetchStudentAttendance,
@@ -47,6 +47,9 @@ export default function StudentProfilePage() {
   const [pointsLogs,       setPointsLogs]       = useState([]);
   const [showAllPoints,    setShowAllPoints]    = useState(false);
   const [showAddPoints,    setShowAddPoints]    = useState(false);
+
+  // Copy code state
+  const [copySuccess,      setCopySuccess]      = useState(false);
 
   // Note form state
   const [showNoteForm,   setShowNoteForm]   = useState(false);
@@ -105,6 +108,26 @@ export default function StudentProfilePage() {
       setTotalPoints(summary[id] ?? 0);
       setPointsLogs(logs);
     } catch (e) { console.warn('refresh points error', e); }
+  }
+
+  async function handleCopyCode() {
+    const code = student?.code;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = code;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -505,6 +528,60 @@ export default function StudentProfilePage() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* ── Points Code card ── */}
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '16px 18px',
+            border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '16px' }}>🔑</span>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>كود النقاط</h3>
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              background: '#F9FAFB', borderRadius: '10px', padding: '12px 14px',
+              border: '1px solid #E5E7EB',
+            }}>
+              <code style={{
+                flex: 1, fontSize: '16px', fontWeight: 900, color: '#8B1A1A',
+                fontFamily: 'monospace', letterSpacing: '1px', direction: 'ltr',
+                textAlign: 'left',
+              }}>
+                {student?.code || '—'}
+              </code>
+              {student?.code && (
+                <button
+                  id="copy-points-code-btn"
+                  onClick={handleCopyCode}
+                  title="نسخ كود النقاط"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    padding: '7px 12px', borderRadius: '8px', border: 'none',
+                    background: copySuccess ? '#DCFCE7' : '#8B1A1A',
+                    color: copySuccess ? '#16A34A' : 'white',
+                    fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '11px',
+                    cursor: 'pointer', transition: 'all 0.2s ease', flexShrink: 0,
+                  }}
+                >
+                  {copySuccess
+                    ? <><CheckCheck size={13} /> تم النسخ</>
+                    : <><Copy size={13} /> نسخ</>}
+                </button>
+              )}
+            </div>
+            <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '8px', lineHeight: 1.5 }}>
+              يمكن للطالب استخدام هذا الكود على صفحة
+              {' '}<a
+                href="/my-points"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#8B1A1A', fontWeight: 700, textDecoration: 'none' }}
+              >
+                اعرف نقاطك
+              </a>
+            </p>
           </div>
         </div>
 
