@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
 
 const SOURCE_LABELS = {
   attendance: 'حضور',
@@ -37,23 +36,48 @@ export default function MyPointsPage() {
     setResult(null);
 
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke('get-student-points', {
-        body: { code: trimmed },
-      });
+      // Raw fetch with only the anon key — no user session attached.
+      // This works for completely unauthenticated (anonymous) students.
+      const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      if (fnErr) {
+      const res = await fetch(
+        `${supabaseUrl}/functions/v1/get-student-points`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${supabaseAnon}`,
+            'apikey':        supabaseAnon,
+          },
+          body: JSON.stringify({ code: trimmed }),
+        }
+      );
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setError('حدث خطأ أثناء جلب النقاط، حاول مرة أخرى');
+        return;
+      }
+
+      // 404 / INVALID_CODE = wrong code entered by student
+      if (res.status === 404 || data?.error === 'INVALID_CODE') {
         setError('الكود غير صحيح، من فضلك راجع خادم الفصل');
         return;
       }
 
-      if (data?.error === 'INVALID_CODE' || !data?.student_name) {
-        setError('الكود غير صحيح، من فضلك راجع خادم الفصل');
+      // Any other non-2xx = real server / network error
+      if (!res.ok || !data?.student_name) {
+        setError('حدث خطأ أثناء جلب النقاط، حاول مرة أخرى');
         return;
       }
 
       setResult(data);
     } catch {
-      setError('الكود غير صحيح، من فضلك راجع خادم الفصل');
+      // Network failure (offline, DNS, etc.)
+      setError('حدث خطأ أثناء جلب النقاط، حاول مرة أخرى');
     } finally {
       setLoading(false);
     }

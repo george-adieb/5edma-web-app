@@ -12,6 +12,7 @@ import EditStudentPage from './pages/EditStudentPage';
 import AddServantPage from './pages/AddServantPage';
 import LoginPage from './pages/LoginPage';
 import MyPointsPage from './pages/MyPointsPage';
+import AIAssistantPage from './pages/AIAssistantPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -58,6 +59,7 @@ const router = createBrowserRouter([
       { path: 'servants/new', element: <AddServantPage /> },
       { path: 'followup', element: <FollowUpPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'ai-assistant', element: <AIAssistantPage /> },
     ],
   },
 ]);

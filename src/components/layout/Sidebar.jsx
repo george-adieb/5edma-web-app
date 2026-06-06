@@ -1,16 +1,17 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X,
+  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
-  { to: '/',          icon: LayoutDashboard, label: 'لوحة التحكم' },
-  { to: '/attendance', icon: CalendarCheck,   label: 'الحضور'      },
-  { to: '/students',  icon: Users,            label: 'المخدومين'      },
-  { to: '/servants',  icon: User,             label: 'الخدام'      },
-  { to: '/followup',  icon: Heart,            label: 'الافتقاد'    },
-  { to: '/settings',  icon: Settings,         label: 'الإعدادات'   },
+  { to: '/',              icon: LayoutDashboard, label: 'لوحة التحكم'      },
+  { to: '/attendance',    icon: CalendarCheck,   label: 'الحضور'           },
+  { to: '/students',      icon: Users,           label: 'المخدومين'        },
+  { to: '/servants',      icon: User,            label: 'الخدام'           },
+  { to: '/followup',      icon: Heart,           label: 'الافتقاد'         },
+  { to: '/ai-assistant',  icon: Bot,             label: 'الخادم المساعد'  },
+  { to: '/settings',      icon: Settings,        label: 'الإعدادات'        },
 ];
 
 function ContextualAddBtn({ onClose }) {

@@ -1,17 +1,23 @@
 // supabase/functions/get-student-points/index.ts
 //
-// Public edge function — no caller auth required.
-// Uses service role key internally so RLS is bypassed safely.
+// PUBLIC edge function — no caller auth required.
+// JWT verification is disabled via supabase/config.toml or the deploy flag:
+//   supabase functions deploy get-student-points --no-verify-jwt
 //
-// Deploy:  supabase functions deploy get-student-points
+// Uses service role key internally so RLS is bypassed safely.
+// Students call this page anonymously — no login needed.
+//
+// Deploy:  supabase functions deploy get-student-points --no-verify-jwt
 // Secret:  supabase secrets set SERVICE_ROLE_KEY=<your-service-role-key>
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL       = Deno.env.get('SUPABASE_URL')!;
-const SERVICE_ROLE_KEY   = Deno.env.get('SERVICE_ROLE_KEY')!;
+const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!;
 
-const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+// Admin client — uses service role so RLS is bypassed.
+// Never exposed to the caller; only used inside this function.
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
@@ -29,7 +35,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
-  // ── Handle CORS preflight ────────────────────────────────────────────────────
+  // ── CORS preflight ────────────────────────────────────────────────────────────
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200, headers: corsHeaders });
   }
@@ -39,12 +45,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── 1. Parse and validate input ──────────────────────────────────────────
+    // ── 1. Parse body ─────────────────────────────────────────────────────────
     let body: { code?: string };
     try {
       body = await req.json();
     } catch {
-      return jsonResponse({ error: 'Invalid JSON body' }, 400);
+      return jsonResponse({ error: 'INVALID_CODE' }, 400);
     }
 
     const rawCode = body?.code;
@@ -52,47 +58,43 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'INVALID_CODE' }, 400);
     }
 
-    // ── 2. Normalize code ────────────────────────────────────────────────────
+    // ── 2. Normalize code ─────────────────────────────────────────────────────
     const inputCode = rawCode.trim().toUpperCase();
     if (!inputCode) {
       return jsonResponse({ error: 'INVALID_CODE' }, 400);
     }
 
-    // ── 3. Find student by code ──────────────────────────────────────────────
-    // Try students.code first. If points_access_code column exists and doesn't
-    // match, we fall back to it — but since per the spec it equals students.code,
-    // a single OR filter is sufficient. We guard with try/catch in case the
-    // points_access_code column doesn't exist yet.
+    // ── 3. Find student ───────────────────────────────────────────────────────
+    // No auth check, no getUser() — purely code-based lookup via service role.
+    // Only safe fields selected: id (needed for points lookup), name, grade.
     let student: { id: string; name: string; grade: string | null } | null = null;
 
-    // Primary lookup: students.code
+    // Primary: students.code
     {
-      const { data, error } = await adminClient
+      const { data, error } = await supabaseAdmin
         .from('students')
         .select('id, name, grade')
         .eq('code', inputCode)
         .maybeSingle();
 
       if (error) {
-        console.error('[get-student-points] primary lookup error:', error);
+        console.error('[get-student-points] lookup error:', error.message);
         return jsonResponse({ error: 'LOOKUP_ERROR' }, 500);
       }
       if (data) student = data;
     }
 
-    // Fallback: points_access_code (if the column exists)
+    // Fallback: points_access_code (gracefully ignored if column doesn't exist)
     if (!student) {
       try {
-        const { data, error } = await adminClient
+        const { data, error } = await supabaseAdmin
           .from('students')
           .select('id, name, grade')
           .eq('points_access_code', inputCode)
           .maybeSingle();
-
-        // If this fails with an "unknown column" type error, just skip.
         if (!error && data) student = data;
       } catch {
-        // Column doesn't exist — ignore silently
+        // Column doesn't exist — skip silently
       }
     }
 
@@ -102,18 +104,15 @@ Deno.serve(async (req) => {
 
     const studentId = student.id;
 
-    // ── 4. Fetch total points and latest 10 logs in parallel ─────────────────
+    // ── 4. Points summary + latest 10 logs (parallel) ─────────────────────────
     const [summaryResult, logsResult] = await Promise.all([
-      // Total points: SUM via student_points_summary view if it exists,
-      // otherwise fall back to raw table aggregation
-      adminClient
+      supabaseAdmin
         .from('student_points_summary')
         .select('total_points')
         .eq('student_id', studentId)
         .maybeSingle(),
 
-      // Latest 10 logs — only safe fields, NO student UUIDs, NO servant info
-      adminClient
+      supabaseAdmin
         .from('student_points_logs')
         .select('points, reason, source, created_at')
         .eq('student_id', studentId)
@@ -121,20 +120,19 @@ Deno.serve(async (req) => {
         .limit(10),
     ]);
 
-    // Calculate total points
+    // Total points — fall back to manual SUM if the summary view is unavailable
     let totalPoints = 0;
     if (summaryResult.data) {
       totalPoints = summaryResult.data.total_points ?? 0;
     } else {
-      // Fallback: manually sum from the logs table
-      const { data: allLogs } = await adminClient
+      const { data: allLogs } = await supabaseAdmin
         .from('student_points_logs')
         .select('points')
         .eq('student_id', studentId);
       totalPoints = (allLogs || []).reduce((acc, l) => acc + (l.points ?? 0), 0);
     }
 
-    // Safe logs list — only the explicitly whitelisted fields
+    // Safe log list — only whitelisted fields, no UUIDs, no servant data
     const logs = (logsResult.data || []).map((log) => ({
       points:     log.points,
       reason:     log.reason,
@@ -142,7 +140,8 @@ Deno.serve(async (req) => {
       created_at: log.created_at,
     }));
 
-    // ── 5. Return safe response ──────────────────────────────────────────────
+    // ── 5. Safe response ──────────────────────────────────────────────────────
+    // No student UUID, no phone, no address, no medical notes, no servant data.
     return jsonResponse({
       student_name: student.name,
       grade:        student.grade ?? '',
