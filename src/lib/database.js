@@ -321,6 +321,9 @@ export async function insertStudent(studentData) {
     avatar,
     avatar_color:  avatarColor,
     notes:         studentData.notes         || null,
+    latitude:      studentData.latitude      || null,
+    longitude:     studentData.longitude     || null,
+    location_updated_at: (studentData.latitude && studentData.longitude) ? new Date().toISOString() : null,
   };
   // ⛔ NOT sent: attendance_rate, last_attendance, grade_id — not real DB columns
 
@@ -363,6 +366,12 @@ export async function updateStudent(id, studentData) {
     notes:         studentData.notes         || null,
   };
 
+  if ('latitude' in studentData) row.latitude = studentData.latitude;
+  if ('longitude' in studentData) row.longitude = studentData.longitude;
+  if ('latitude' in studentData && 'longitude' in studentData) {
+    row.location_updated_at = (studentData.latitude && studentData.longitude) ? new Date().toISOString() : null;
+  }
+
   console.log('[updateStudent] payload →', row);
   const { data, error } = await supabase.from('students').update(row).eq('id', id).select().single();
   if (error) {
@@ -386,6 +395,77 @@ export async function deleteStudent(id) {
   const { error } = await supabase.from('students').delete().eq('id', id);
   if (error) {
     console.error('[deleteStudent] error →', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch students for the Follow-up Map with full role-based scoping.
+ *
+ * Scope rules:
+ *   ADMIN          → all students
+ *   SERVICE_HEAD   → students whose grade is inside profile.assigned_grades
+ *   SERVANT        → students matching assigned_grade and assigned_gender
+ *
+ * Returns only fields needed for the map:
+ *   id, name, code, grade, status, gender, parent_phone, parent_phone_2, latitude, longitude, address
+ *
+ * Students without latitude/longitude are included so the caller can show
+ * the "no location" count, but the map only renders pins for those with coords.
+ */
+export async function fetchStudentsForFollowUpMap(profile = null) {
+  const fields = 'id, name, code, grade, status, gender, parent_phone, parent_phone_2, latitude, longitude, address';
+  let query = supabase.from('students').select(fields);
+
+  const role = profile?.role;
+
+  if (role === 'SERVANT') {
+    query = query
+      .eq('grade', profile.assigned_grade)
+      .eq('gender', profile.assigned_gender);
+  } else if (role === 'SERVICE_HEAD') {
+    const grades = Array.isArray(profile.assigned_grades)
+      ? profile.assigned_grades
+      : profile.assigned_grade ? [profile.assigned_grade] : [];
+    if (grades.length > 0) {
+      query = query.in('grade', grades);
+    }
+  }
+  // ADMIN and any other privileged role: no extra filter
+
+  const { data, error } = await query.order('name');
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Update only the location fields for a student.
+ */
+export async function updateStudentLocation(id, latitude, longitude) {
+  const { error } = await supabase
+    .from('students')
+    .update({
+      latitude,
+      longitude,
+      location_updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('[updateStudentLocation] error →', error);
+    throw error;
+  }
+}
+
+/** Update the text address of a student */
+export async function updateStudentAddress(id, address) {
+  const { error } = await supabase
+    .from('students')
+    .update({ address })
+    .eq('id', id);
+
+  if (error) {
+    console.error('[updateStudentAddress] error →', error);
     throw error;
   }
 }

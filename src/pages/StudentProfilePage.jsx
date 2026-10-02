@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Phone, Share2, Edit3, Plus, Heart, Loader2, Star, Copy, CheckCheck } from 'lucide-react';
+import { Phone, Share2, Edit3, Plus, Heart, Loader2, Star, Copy, CheckCheck, MessageCircle } from 'lucide-react';
 import {
   fetchStudent,
   fetchStudentAttendance,
@@ -10,8 +10,26 @@ import {
   updateFollowUpLog,
   fetchStudentPointsLogs,
   fetchStudentPointsSummary,
+  updateStudentLocation,
+  updateStudentAddress,
 } from '../lib/database';
 import AddPointsModal from '../components/AddPointsModal';
+import LocationPickerModal from '../components/LocationPickerModal';
+
+function normalizeEgyptianPhoneForWhatsApp(phone) {
+  if (!phone) return null;
+  let p = phone.replace(/[\s\-\(\)\+]/g, '');
+  if (p.startsWith('01') && p.length === 11) return '2' + p;
+  if (p.startsWith('20') && p.length === 12) return p;
+  if (p.startsWith('0020')) return p.substring(2);
+  return p;
+}
+
+function getWhatsAppUrl(phone) {
+  const norm = normalizeEgyptianPhoneForWhatsApp(phone);
+  if (!norm) return null;
+  return `https://wa.me/${norm}`;
+}
 
 const ATT_STYLE = {
   حاضر:  { bg: '#DCFCE7', color: '#16A34A', label: '✓' },
@@ -51,6 +69,11 @@ export default function StudentProfilePage() {
   // Copy code state
   const [copySuccess,      setCopySuccess]      = useState(false);
 
+  // Location state
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationSaving,     setLocationSaving]     = useState(false);
+  const [locationSuccess,    setLocationSuccess]    = useState(false);
+
   // Note form state
   const [showNoteForm,   setShowNoteForm]   = useState(false);
   const [newNote,        setNewNote]        = useState('');
@@ -62,6 +85,11 @@ export default function StudentProfilePage() {
   const [editNote,       setEditNote]       = useState('');
   const [editNoteType,   setEditNoteType]   = useState('مكالمة');
   const [isUpdatingNote, setIsUpdatingNote] = useState(false);
+
+  // Edit address state
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [addressDraft,     setAddressDraft]     = useState('');
+  const [isSavingAddress,  setIsSavingAddress]  = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -219,6 +247,34 @@ export default function StudentProfilePage() {
     setEditNoteType(log.type || 'مكالمة');
   }
 
+  async function handleSaveLocation(lat, lng) {
+    setLocationSaving(true);
+    try {
+      await updateStudentLocation(student.id, lat, lng);
+      // Refresh student data to reflect new coords
+      const updated = await fetchStudent(student.id);
+      setStudent(updated);
+      setLocationSuccess(true);
+      setTimeout(() => setLocationSuccess(false), 3000);
+    } finally {
+      setLocationSaving(false);
+    }
+  }
+
+  async function handleSaveAddress() {
+    setIsSavingAddress(true);
+    try {
+      await updateStudentAddress(id, addressDraft);
+      setStudent(s => ({ ...s, address: addressDraft }));
+      setIsEditingAddress(false);
+    } catch (err) {
+      console.error('Failed to save address', err);
+      alert('حدث خطأ أثناء حفظ العنوان');
+    } finally {
+      setIsSavingAddress(false);
+    }
+  }
+
   async function handleShare() {
     if (navigator.share) {
       try {
@@ -281,12 +337,57 @@ export default function StudentProfilePage() {
                 <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                   <span style={{ fontSize: '16px' }}>🎓</span> {student.grade || student.grade_id || '—'}
                 </span>
-                <a
-                  href={`tel:${student.parent_phone}`}
-                  style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', fontWeight: 600 }}
-                >
-                  <span style={{ fontSize: '16px' }}>📞</span> {student.parent_phone || '—'}
-                </a>
+                {student.parent_phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                      <span style={{ fontSize: '16px' }}>📱</span> المخدوم: <span dir="ltr">{student.parent_phone}</span>
+                    </span>
+                    <a
+                      href={`tel:${student.parent_phone}`}
+                      style={{ color: '#16A34A', display: 'flex', alignItems: 'center', padding: '4px', background: '#DCFCE7', borderRadius: '6px', textDecoration: 'none' }}
+                    >
+                      <Phone size={14} />
+                    </a>
+                    {getWhatsAppUrl(student.parent_phone) && (
+                      <a
+                        href={getWhatsAppUrl(student.parent_phone)}
+                        target="_blank" rel="noopener noreferrer"
+                        aria-label="فتح واتساب للمخدوم"
+                        style={{ color: '#25D366', display: 'flex', alignItems: 'center', padding: '4px', background: '#E8FDF0', borderRadius: '6px', textDecoration: 'none' }}
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                    )}
+                  </div>
+                )}
+                {student.parent_phone_2 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                      <span style={{ fontSize: '16px' }}>☎️</span> ولي الأمر: <span dir="ltr">{student.parent_phone_2}</span>
+                    </span>
+                    <a
+                      href={`tel:${student.parent_phone_2}`}
+                      style={{ color: '#1D4ED8', display: 'flex', alignItems: 'center', padding: '4px', background: '#DBEAFE', borderRadius: '6px', textDecoration: 'none' }}
+                    >
+                      <Phone size={14} />
+                    </a>
+                    {getWhatsAppUrl(student.parent_phone_2) && (
+                      <a
+                        href={getWhatsAppUrl(student.parent_phone_2)}
+                        target="_blank" rel="noopener noreferrer"
+                        aria-label="فتح واتساب لولي الأمر"
+                        style={{ color: '#25D366', display: 'flex', alignItems: 'center', padding: '4px', background: '#E8FDF0', borderRadius: '6px', textDecoration: 'none' }}
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                    )}
+                  </div>
+                )}
+                {(!student.parent_phone && !student.parent_phone_2) && (
+                  <span style={{ fontSize: '13px', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <span style={{ fontSize: '16px' }}>📞</span> لا يوجد رقم
+                  </span>
+                )}
                 <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                   <span style={{ fontSize: '16px' }}>🎂</span> {student.birth_date || '—'}
                 </span>
@@ -409,24 +510,233 @@ export default function StudentProfilePage() {
             )}
           </div>
 
-          {/* Quick actions */}
+          {/* Location section */}
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '16px 18px',
+            border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '16px' }}>📍</span>
+                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>العنوان والموقع</h3>
+              </div>
+            </div>
+
+            {/* Detailed Address */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <p style={{ fontSize: '12px', fontWeight: 700, color: '#6B7280', margin: 0 }}>العنوان التفصيلي</p>
+                {!isEditingAddress && (
+                  <button
+                    onClick={() => {
+                      setAddressDraft(student.address || '');
+                      setIsEditingAddress(true);
+                    }}
+                    style={{
+                      background: 'none', border: 'none', padding: '4px 8px',
+                      color: '#1D4ED8', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '4px'
+                    }}
+                  >
+                    ✏️ تعديل العنوان
+                  </button>
+                )}
+              </div>
+              
+              {isEditingAddress ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <textarea
+                    value={addressDraft}
+                    onChange={e => setAddressDraft(e.target.value)}
+                    placeholder="اكتب العنوان بالتفصيل..."
+                    style={{
+                      width: '100%', padding: '10px 12px', borderRadius: '8px',
+                      border: '1.5px solid #8B1A1A', outline: 'none',
+                      fontFamily: 'Cairo, sans-serif', fontSize: '13px', direction: 'rtl',
+                      minHeight: '70px', resize: 'vertical'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setIsEditingAddress(false)}
+                      disabled={isSavingAddress}
+                      style={{
+                        padding: '6px 12px', borderRadius: '6px', background: 'white',
+                        border: '1px solid #D1D5DB', color: '#4B5563', fontSize: '11px',
+                        fontWeight: 700, cursor: 'pointer', fontFamily: 'Cairo, sans-serif'
+                      }}
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      onClick={handleSaveAddress}
+                      disabled={isSavingAddress}
+                      style={{
+                        padding: '6px 14px', borderRadius: '6px', background: 'linear-gradient(135deg,#8B1A1A,#B52626)',
+                        border: 'none', color: 'white', fontSize: '11px',
+                        fontWeight: 700, cursor: 'pointer', fontFamily: 'Cairo, sans-serif'
+                      }}
+                    >
+                      {isSavingAddress ? 'جاري الحفظ...' : 'حفظ العنوان'}
+                    </button>
+                  </div>
+                </div>
+              ) : student.address ? (
+                <p style={{ fontSize: '13px', color: '#111827', margin: 0, lineHeight: 1.6, background: '#F9FAFB', padding: '10px 12px', borderRadius: '8px', border: '1px solid #F3F4F6' }}>
+                  {student.address}
+                </p>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0, background: '#F9FAFB', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #E5E7EB' }}>لم يتم إدخال العنوان التفصيلي</p>
+              )}
+            </div>
+
+            {/* Map Location */}
+            <div>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#6B7280', margin: '0 0 6px' }}>الموقع على الخريطة</p>
+              {student.latitude && student.longitude ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{
+                    padding: '10px 12px', background: '#F0FDF4',
+                    borderRadius: '8px', border: '1px solid #BBF7D0',
+                  }}>
+                    <p style={{ fontSize: '11px', color: '#166534', fontWeight: 700, margin: '0 0 4px' }}>تم تحديد الموقع ✓</p>
+                    <p style={{ fontSize: '11px', color: '#4B5563', margin: 0, direction: 'ltr', textAlign: 'right', fontWeight: 600 }}>
+                    {parseFloat(student.latitude).toFixed(5)}, {parseFloat(student.longitude).toFixed(5)}
+                  </p>
+                  {student.location_updated_at && (
+                    <p style={{ fontSize: '10px', color: '#9CA3AF', margin: '3px 0 0' }}>
+                      آخر تحديث: {new Date(student.location_updated_at).toLocaleDateString('ar-EG')}
+                    </p>
+                  )}
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${student.latitude},${student.longitude}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                    padding: '9px 14px', borderRadius: '8px',
+                    background: '#EFF6FF', color: '#1D4ED8', textDecoration: 'none',
+                    fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                    border: '1px solid #BFDBFE', transition: 'all 0.15s',
+                  }}
+                >
+                  <span>🗺️</span> فتح على Google Maps
+                </a>
+                <button
+                  onClick={() => setShowLocationPicker(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                    padding: '9px 14px', borderRadius: '8px',
+                    border: '1.5px solid #E5E7EB', background: 'white',
+                    fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                    color: '#6B7280', cursor: 'pointer', transition: 'all 0.15s',
+                    width: '100%',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#8B1A1A'; e.currentTarget.style.color = '#8B1A1A'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#6B7280'; }}
+                >
+                  📍 تعديل الموقع
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'center', padding: '8px 0' }}>
+                  لم يتم تحديد موقع السكن بعد
+                </p>
+                <button
+                  onClick={() => setShowLocationPicker(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                    padding: '10px 14px', borderRadius: '9px',
+                    background: 'linear-gradient(135deg,#8B1A1A,#B52626)',
+                    color: 'white', border: 'none',
+                    fontFamily: 'Cairo, sans-serif', fontSize: '13px', fontWeight: 700,
+                    cursor: 'pointer', width: '100%',
+                    boxShadow: '0 4px 12px rgba(139,26,26,0.25)',
+                  }}
+                >
+                  📍 تحديد الموقع على الخريطة
+                </button>
+              </div>
+            )}
+            </div>
+
+            {locationSuccess && (
+              <div style={{
+                marginTop: '8px', padding: '8px 12px', borderRadius: '8px',
+                background: '#DCFCE7', color: '#166534',
+                fontSize: '12px', fontWeight: 700, textAlign: 'center',
+              }}>
+                ✓ تم حفظ الموقع بنجاح
+              </div>
+            )}
+          </div>
           <div style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827', marginBottom: '12px' }}>إجراءات سريعة</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <a
-                href={`tel:${student.parent_phone}`}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '10px 14px', borderRadius: '9px',
-                  background: '#F0FDF4', color: '#16A34A', textDecoration: 'none',
-                  fontFamily: 'Cairo, sans-serif', fontSize: '13px', fontWeight: 700,
-                }}
-              >
-                <Phone size={15} /> اتصال بولي الأمر
-              </a>
+              {student.parent_phone && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <a
+                    href={`tel:${student.parent_phone}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      padding: '10px 14px', borderRadius: '9px',
+                      background: '#F0FDF4', color: '#16A34A', textDecoration: 'none',
+                      fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                    }}
+                  >
+                    <Phone size={14} /> اتصال بالمخدوم
+                  </a>
+                  {getWhatsAppUrl(student.parent_phone) && (
+                    <a
+                      href={getWhatsAppUrl(student.parent_phone)}
+                      target="_blank" rel="noopener noreferrer"
+                      aria-label="فتح واتساب للمخدوم"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                        padding: '10px 14px', borderRadius: '9px',
+                        background: '#E8FDF0', color: '#25D366', textDecoration: 'none',
+                        fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                      }}
+                    >
+                      <MessageCircle size={14} /> واتساب المخدوم
+                    </a>
+                  )}
+                </div>
+              )}
+              {student.parent_phone_2 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <a
+                    href={`tel:${student.parent_phone_2}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      padding: '10px 14px', borderRadius: '9px',
+                      background: '#EFF6FF', color: '#1D4ED8', textDecoration: 'none',
+                      fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                    }}
+                  >
+                    <Phone size={14} /> اتصال ولي الأمر
+                  </a>
+                  {getWhatsAppUrl(student.parent_phone_2) && (
+                    <a
+                      href={getWhatsAppUrl(student.parent_phone_2)}
+                      target="_blank" rel="noopener noreferrer"
+                      aria-label="فتح واتساب لولي الأمر"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                        padding: '10px 14px', borderRadius: '9px',
+                        background: '#E8FDF0', color: '#25D366', textDecoration: 'none',
+                        fontFamily: 'Cairo, sans-serif', fontSize: '12px', fontWeight: 700,
+                      }}
+                    >
+                      <MessageCircle size={14} /> واتساب ولي الأمر
+                    </a>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => navigate('/followup')}
                 style={{
@@ -791,6 +1101,15 @@ export default function StudentProfilePage() {
       onClose={() => setShowAddPoints(false)}
       student={student}
       onSuccess={refreshPoints}
+    />
+    {/* Location Picker Modal */}
+    <LocationPickerModal
+      isOpen={showLocationPicker}
+      onClose={() => setShowLocationPicker(false)}
+      onSave={handleSaveLocation}
+      initialLat={student?.latitude ? parseFloat(student.latitude) : null}
+      initialLng={student?.longitude ? parseFloat(student.longitude) : null}
+      studentName={student?.name || ''}
     />
     </>
   );

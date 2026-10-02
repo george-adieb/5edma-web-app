@@ -6,6 +6,7 @@ import StudentsPage from './pages/StudentsPage';
 import ServantsPage from './pages/ServantsPage';
 import StudentProfilePage from './pages/StudentProfilePage';
 import FollowUpPage from './pages/FollowUpPage';
+import FollowUpMapPage from './pages/FollowUpMapPage';
 import SettingsPage from './pages/SettingsPage';
 import AddStudentPage from './pages/AddStudentPage';
 import EditStudentPage from './pages/EditStudentPage';
@@ -13,6 +14,7 @@ import AddServantPage from './pages/AddServantPage';
 import LoginPage from './pages/LoginPage';
 import MyPointsPage from './pages/MyPointsPage';
 import AIAssistantPage from './pages/AIAssistantPage';
+import YearlyPromotionPage from './pages/YearlyPromotionPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -58,7 +60,9 @@ const router = createBrowserRouter([
       { path: 'servants', element: <ServantsPage /> },
       { path: 'servants/new', element: <AddServantPage /> },
       { path: 'followup', element: <FollowUpPage /> },
+      { path: 'followup/map', element: <FollowUpMapPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/yearly-promotion', element: <YearlyPromotionPage /> },
       { path: 'ai-assistant', element: <AIAssistantPage /> },
     ],
   },

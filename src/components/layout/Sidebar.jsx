@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot,
+  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot, MapPin,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/students',      icon: Users,           label: 'المخدومين'        },
   { to: '/servants',      icon: User,            label: 'الخدام'           },
   { to: '/followup',      icon: Heart,           label: 'الافتقاد'         },
+  { to: '/followup/map',  icon: MapPin,          label: 'خريطة الافتقاد'  },
   { to: '/ai-assistant',  icon: Bot,             label: 'الخادم المساعد'  },
   { to: '/settings',      icon: Settings,        label: 'الإعدادات'        },
 ];

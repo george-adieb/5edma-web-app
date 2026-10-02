@@ -6,6 +6,7 @@ import {
 import { insertStudent, fetchServantsForStudentAssignment } from '../lib/database';
 import { useAuth } from '../contexts/AuthContext';
 import { GRADES, GRADE_LABEL_MAP } from '../data/constants';
+import LocationPickerModal from '../components/LocationPickerModal';
 
 /* ─── Shared sub-components ─────────────────────────────── */
 
@@ -107,6 +108,7 @@ const EMPTY = {
   school: '', parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '',
   address: '', nearestChurch: '', servant: '', servantName: '', studentStatus: 'منتظم',
   notes: '', medicalNotes: '', hobbies: '',
+  latitude: null, longitude: null,
 };
 
 export default function AddStudentPage() {
@@ -156,6 +158,9 @@ export default function AddStudentPage() {
   // Servant dropdown state
   const [servants,        setServants]        = useState([]);
   const [servantsLoading, setServantsLoading] = useState(false);
+
+  // Map Picker State
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
   const age = calcAge(form.birthDate);
 
@@ -413,8 +418,8 @@ export default function AddStudentPage() {
             </FormGroup>
           </SectionCard>
 
-          {/* 2. بيانات ولي الأمر */}
-          <SectionCard icon={Phone} title="بيانات ولي الأمر">
+          {/* 2. بيانات التواصل */}
+          <SectionCard icon={Phone} title="بيانات التواصل">
             <div className="grid-form-2">
               <FormGroup label="صلة القرابة" optional>
                 <select value={form.parentRelation} onChange={e => set('parentRelation', e.target.value)}
@@ -435,7 +440,7 @@ export default function AddStudentPage() {
             </div>
 
             <div className="grid-form-2">
-              <FormGroup label="رقم هاتف إضافي" optional error={errors.parentPhone2}>
+              <FormGroup label="رقم ولي الأمر" optional error={errors.parentPhone2}>
                 <input type="tel" dir="ltr" value={form.parentPhone2}
                   onChange={e => set('parentPhone2', e.target.value)}
                   placeholder="01xxxxxxxxx"
@@ -444,7 +449,7 @@ export default function AddStudentPage() {
                   onBlur={e  => e.target.style.borderColor = errors.parentPhone2 ? '#FCA5A5' : '#E5E7EB'} />
               </FormGroup>
               <div data-has-error={!!errors.parentPhone}>
-                <FormGroup label="رقم الهاتف الأساسي" error={errors.parentPhone}>
+                <FormGroup label="رقم الموبايل الشخصي للمخدوم" error={errors.parentPhone}>
                   <input type="tel" dir="ltr" value={form.parentPhone}
                     onChange={e => set('parentPhone', e.target.value)}
                     placeholder="01xxxxxxxxx"
@@ -497,14 +502,53 @@ export default function AddStudentPage() {
 
         {/* ══ Column 2 ══ */}
         <div>
-          {/* 3. السكن والمتابعة */}
-          <SectionCard icon={MapPin} title="السكن والمتابعة">
-            <FormGroup label="المنطقة / العنوان" optional>
+          {/* 3. العنوان والموقع */}
+          <SectionCard icon={MapPin} title="العنوان والموقع">
+            <FormGroup label="العنوان التفصيلي" optional>
               <textarea value={form.address} onChange={e => set('address', e.target.value)}
-                placeholder="العنوان بالتفصيل" style={TA(false, 2)}
+                placeholder="اكتب العنوان بالتفصيل: الشارع، رقم العمارة، الدور، علامة مميزة..." style={TA(false, 2)}
                 onFocus={e => e.target.style.borderColor = '#8B1A1A'}
                 onBlur={e  => e.target.style.borderColor = '#E5E7EB'} />
             </FormGroup>
+            
+            <FormGroup label="موقع السكن على الخريطة" optional>
+              <div style={{
+                padding: '12px', background: '#F9FAFB', borderRadius: '8px',
+                border: '1.5px solid #F3F4F6', display: 'flex', flexDirection: 'column', gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: '13px', color: form.latitude ? '#16A34A' : '#6B7280', fontWeight: 600 }}>
+                    {form.latitude ? 'تم تحديد الموقع على الخريطة' : 'لم يتم تحديد الموقع على الخريطة بعد'}
+                  </span>
+                  <MapPin size={16} color={form.latitude ? '#16A34A' : '#9CA3AF'} />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  {form.latitude && (
+                    <button type="button" onClick={() => window.open(`https://maps.google.com/?q=${form.latitude},${form.longitude}`, '_blank')}
+                      style={{
+                        padding: '8px 14px', borderRadius: '7px', background: '#F0FDF4', color: '#16A34A',
+                        border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif', cursor: 'pointer'
+                      }}
+                    >فتح في الخرائط</button>
+                  )}
+                  <button type="button" onClick={() => setIsMapModalOpen(true)}
+                    style={{
+                      padding: '8px 14px', borderRadius: '7px', background: 'linear-gradient(135deg,#8B1A1A,#B52626)', color: 'white',
+                      border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif', cursor: 'pointer'
+                    }}
+                  >{form.latitude ? 'تعديل الموقع على الخريطة' : 'تحديد الموقع على الخريطة'}</button>
+                </div>
+              </div>
+            </FormGroup>
+
+            <p style={{ fontSize: '11px', color: '#6B7280', margin: '8px 0 0', textAlign: 'right', lineHeight: 1.5 }}>
+              العنوان التفصيلي يساعد الخادم في الوصول للمكان، وموقع الخريطة يستخدم لظهور المخدوم على خريطة الافتقاد.
+            </p>
+          </SectionCard>
+
+          {/* 4. معلومات إضافية */}
+          <SectionCard icon={Info} title="معلومات إضافية">
             <FormGroup label="أقرب كنيسة" optional>
               <input value={form.nearestChurch} onChange={e => set('nearestChurch', e.target.value)}
                 placeholder="اسم الكنيسة" style={IS(false)}
@@ -618,6 +662,17 @@ export default function AddStudentPage() {
           </SectionCard>
         </div>
       </div>
+
+      <LocationPickerModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        initialLat={form.latitude}
+        initialLng={form.longitude}
+        studentName={form.fullName || 'مخدوم جديد'}
+        onSave={async (lat, lng) => {
+          setForm(p => ({ ...p, latitude: lat, longitude: lng }));
+        }}
+      />
     </div>
   );
 }

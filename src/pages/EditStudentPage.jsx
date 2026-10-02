@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   User, Info, Save, Loader2, Phone, MapPin, AlertCircle,
 } from 'lucide-react';
-import { fetchStudent, updateStudent } from '../lib/database';
+import { fetchStudent, updateStudent, updateStudentLocation } from '../lib/database';
 import { GRADES, REVERSE_GRADE_MAP } from '../data/constants';
+import LocationPickerModal from '../components/LocationPickerModal';
 
 /* ─── Shared sub-components ─────────────────────────────── */
 
@@ -140,6 +141,11 @@ export default function EditStudentPage() {
   const [errors,         setErrors]         = useState({});
   const [saving,         setSaving]         = useState(false);
   const [submitError,    setSubmitError]    = useState('');
+
+  // Location state (saved independently from the main form)
+  const [studentLocation, setStudentLocation] = useState({ lat: null, lng: null, updated_at: null });
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationSuccess,    setLocationSuccess]    = useState(false);
   
   const age = calcAge(form.birthDate);
 
@@ -173,6 +179,11 @@ export default function EditStudentPage() {
           notes: student.notes || '',
           medicalNotes: student.medical_notes || '',
           hobbies: hobbiesText,
+        });
+        setStudentLocation({
+          lat: student.latitude ? parseFloat(student.latitude) : null,
+          lng: student.longitude ? parseFloat(student.longitude) : null,
+          updated_at: student.location_updated_at || null,
         });
       } catch (err) {
         console.error('Failed to load student:', err);
@@ -226,6 +237,13 @@ export default function EditStudentPage() {
     }
   }
 
+  async function handleSaveLocation(lat, lng) {
+    await updateStudentLocation(id, lat, lng);
+    setStudentLocation({ lat, lng, updated_at: new Date().toISOString() });
+    setLocationSuccess(true);
+    setTimeout(() => setLocationSuccess(false), 3000);
+  }
+
   if (loadingInitial) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '10px' }}>
@@ -236,6 +254,7 @@ export default function EditStudentPage() {
   }
 
   return (
+    <>
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
 
       {/* Breadcrumb */}
@@ -370,8 +389,8 @@ export default function EditStudentPage() {
             </FormGroup>
           </SectionCard>
 
-          {/* 2. بيانات ولي الأمر */}
-          <SectionCard icon={Phone} title="بيانات ولي الأمر">
+          {/* 2. بيانات التواصل */}
+          <SectionCard icon={Phone} title="بيانات التواصل">
             <div className="grid-form-2">
               <FormGroup label="صلة القرابة" optional>
                 <select value={form.parentRelation} onChange={e => set('parentRelation', e.target.value)}
@@ -397,7 +416,7 @@ export default function EditStudentPage() {
             </div>
 
             <div className="grid-form-2">
-              <FormGroup label="رقم هاتف إضافي" optional error={errors.parentPhone2}>
+              <FormGroup label="رقم ولي الأمر" optional error={errors.parentPhone2}>
                 <input
                   type="tel" dir="ltr" value={form.parentPhone2}
                   onChange={e => set('parentPhone2', e.target.value)}
@@ -408,7 +427,7 @@ export default function EditStudentPage() {
                 />
               </FormGroup>
               <div data-has-error={!!errors.parentPhone}>
-                <FormGroup label="رقم الهاتف الأساسي" error={errors.parentPhone}>
+                <FormGroup label="رقم الموبايل الشخصي للمخدوم" error={errors.parentPhone}>
                   <input
                     type="tel" dir="ltr" value={form.parentPhone}
                     onChange={e => set('parentPhone', e.target.value)}
@@ -449,18 +468,61 @@ export default function EditStudentPage() {
 
         {/* ══ LEFT COLUMN ══ */}
         <div>
-          {/* 3. السكن والمتابعة */}
-          <SectionCard icon={MapPin} title="السكن والمتابعة">
-            <FormGroup label="المنطقة / العنوان" optional>
+          {/* 3. العنوان والموقع */}
+          <SectionCard icon={MapPin} title="العنوان والموقع">
+            <FormGroup label="العنوان التفصيلي" optional>
               <textarea
                 value={form.address}
                 onChange={e => set('address', e.target.value)}
-                placeholder="العنوان بالتفصيل"
+                placeholder="اكتب العنوان بالتفصيل: الشارع، رقم العمارة، الدور، علامة مميزة..."
                 style={TA(false, 2)}
                 onFocus={e => e.target.style.borderColor = '#8B1A1A'}
                 onBlur={e => e.target.style.borderColor = '#E5E7EB'}
               />
             </FormGroup>
+
+            <FormGroup label="موقع السكن على الخريطة" optional>
+              <div style={{
+                padding: '12px', background: '#F9FAFB', borderRadius: '8px',
+                border: '1.5px solid #F3F4F6', display: 'flex', flexDirection: 'column', gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: '13px', color: studentLocation.lat ? '#16A34A' : '#6B7280', fontWeight: 600 }}>
+                    {studentLocation.lat ? 'تم تحديد الموقع على الخريطة' : 'لم يتم تحديد الموقع على الخريطة بعد'}
+                  </span>
+                  <MapPin size={16} color={studentLocation.lat ? '#16A34A' : '#9CA3AF'} />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {studentLocation.lat && (
+                    <button type="button" onClick={() => window.open(`https://maps.google.com/?q=${studentLocation.lat},${studentLocation.lng}`, '_blank')}
+                      style={{
+                        padding: '8px 14px', borderRadius: '7px', background: '#F0FDF4', color: '#16A34A',
+                        border: '1px solid #BBF7D0', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif', cursor: 'pointer'
+                      }}
+                    >فتح في الخرائط</button>
+                  )}
+                  <button type="button" onClick={() => setShowLocationPicker(true)}
+                    style={{
+                      padding: '8px 14px', borderRadius: '7px', background: 'linear-gradient(135deg,#8B1A1A,#B52626)', color: 'white',
+                      border: 'none', fontSize: '12px', fontWeight: 700, fontFamily: 'Cairo, sans-serif', cursor: 'pointer'
+                    }}
+                  >{studentLocation.lat ? 'تعديل الموقع على الخريطة' : 'تحديد الموقع على الخريطة'}</button>
+                </div>
+
+                {locationSuccess && (
+                  <div style={{
+                    marginTop: '4px', padding: '6px 10px', borderRadius: '6px',
+                    background: '#DCFCE7', color: '#166534',
+                    fontSize: '11px', fontWeight: 700, textAlign: 'center',
+                  }}>✓ تم حفظ الموقع بنجاح</div>
+                )}
+              </div>
+            </FormGroup>
+
+            <p style={{ fontSize: '11px', color: '#6B7280', margin: '8px 0 16px', textAlign: 'right', lineHeight: 1.5 }}>
+              العنوان التفصيلي يساعد الخادم في الوصول للمكان، وموقع الخريطة يستخدم لظهور المخدوم على خريطة الافتقاد.
+            </p>
 
             <FormGroup label="أقرب كنيسة" optional>
               <input
@@ -566,5 +628,14 @@ export default function EditStudentPage() {
         </div>
       </div>
     </div>
+    <LocationPickerModal
+      isOpen={showLocationPicker}
+      onClose={() => setShowLocationPicker(false)}
+      onSave={handleSaveLocation}
+      initialLat={studentLocation.lat}
+      initialLng={studentLocation.lng}
+      studentName={form.fullName || ''}
+    />
+    </>
   );
 }
