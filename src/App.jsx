@@ -13,6 +13,7 @@ import EditStudentPage from './pages/EditStudentPage';
 import AddServantPage from './pages/AddServantPage';
 import LoginPage from './pages/LoginPage';
 import MyPointsPage from './pages/MyPointsPage';
+import PublicUpdateDataPage from './pages/PublicUpdateDataPage';
 import AIAssistantPage from './pages/AIAssistantPage';
 import YearlyPromotionPage from './pages/YearlyPromotionPage';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -38,6 +39,10 @@ const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />
+  },
+  {
+    path: '/update-data',
+    element: <PublicUpdateDataPage />
   },
   {
     path: '/my-points',

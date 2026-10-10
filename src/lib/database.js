@@ -309,6 +309,8 @@ export async function insertStudent(studentData) {
     parent_relation: studentData.parentRelation || null,
     parent_phone:  studentData.parentPhone   || null,
     parent_phone_2: studentData.parentPhone2 || null,
+    mother_name:   studentData.motherName    || null,
+    student_phone: studentData.studentPhone  || null,
     address:       studentData.address       || null,
     nearest_church: studentData.nearestChurch || null,
     // Store the servant's full_name for display (backward-compat with text column).
@@ -357,6 +359,8 @@ export async function updateStudent(id, studentData) {
     parent_relation: studentData.parentRelation || null,
     parent_phone:  studentData.parentPhone   || null,
     parent_phone_2: studentData.parentPhone2 || null,
+    mother_name:   studentData.motherName    || null,
+    student_phone: studentData.studentPhone  || null,
     address:       studentData.address       || null,
     nearest_church: studentData.nearestChurch || null,
     servant:       studentData.servant       || null,

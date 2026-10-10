@@ -337,10 +337,31 @@ export default function StudentProfilePage() {
                 <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                   <span style={{ fontSize: '16px' }}>🎓</span> {student.grade || student.grade_id || '—'}
                 </span>
+                {student.student_phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                      <span style={{ fontSize: '16px' }}>📱</span> المخدوم: <span dir="ltr">{student.student_phone}</span>
+                    </span>
+                    <a href={`tel:${student.student_phone}`}
+                      style={{ color: '#16A34A', display: 'flex', alignItems: 'center', padding: '4px', background: '#DCFCE7', borderRadius: '6px', textDecoration: 'none' }}>
+                      <Phone size={14} />
+                    </a>
+                  </div>
+                )}
+                {student.mother_name && (
+                  <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <span style={{ fontSize: '16px' }}>👩</span> اسم الأم: {student.mother_name}
+                  </span>
+                )}
+                {student.school && (
+                  <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <span style={{ fontSize: '16px' }}>🏫</span> المدرسة: {student.school}
+                  </span>
+                )}
                 {student.parent_phone && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <span style={{ fontSize: '16px' }}>📱</span> المخدوم: <span dir="ltr">{student.parent_phone}</span>
+                      <span style={{ fontSize: '16px' }}>📱</span> ولي الأمر: <span dir="ltr">{student.parent_phone}</span>
                     </span>
                     <a
                       href={`tel:${student.parent_phone}`}
@@ -363,7 +384,7 @@ export default function StudentProfilePage() {
                 {student.parent_phone_2 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <span style={{ fontSize: '16px' }}>☎️</span> ولي الأمر: <span dir="ltr">{student.parent_phone_2}</span>
+                      <span style={{ fontSize: '16px' }}>☎️</span> رقم آخر: <span dir="ltr">{student.parent_phone_2}</span>
                     </span>
                     <a
                       href={`tel:${student.parent_phone_2}`}
@@ -383,7 +404,7 @@ export default function StudentProfilePage() {
                     )}
                   </div>
                 )}
-                {(!student.parent_phone && !student.parent_phone_2) && (
+                {(!student.parent_phone && !student.parent_phone_2 && !student.student_phone) && (
                   <span style={{ fontSize: '13px', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                     <span style={{ fontSize: '16px' }}>📞</span> لا يوجد رقم
                   </span>

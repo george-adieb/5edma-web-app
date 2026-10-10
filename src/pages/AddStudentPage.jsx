@@ -105,7 +105,7 @@ const RELATIONS = [
 
 const EMPTY = {
   fullName: '', nickname: '', gender: 'ذكر', birthDate: '', grade: '',
-  school: '', parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '',
+  school: '', parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '', motherName: '', studentPhone: '',
   address: '', nearestChurch: '', servant: '', servantName: '', studentStatus: 'منتظم',
   notes: '', medicalNotes: '', hobbies: '',
   latitude: null, longitude: null,
@@ -216,10 +216,11 @@ export default function AddStudentPage() {
     const e = {};
     if (!form.fullName.trim())    e.fullName    = 'الاسم الكامل مطلوب';
     if (!form.grade)              e.grade       = 'يرجى اختيار المرحلة الدراسية';
-    if (!form.parentName.trim())  e.parentName  = 'اسم ولي الأمر مطلوب';
     if (!form.parentPhone.trim()) e.parentPhone = 'رقم الهاتف مطلوب';
     else if (!/^01[0-9]{9}$/.test(form.parentPhone.trim()))
                                   e.parentPhone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+    if (form.studentPhone.trim() && !/^01[0-9]{9}$/.test(form.studentPhone.trim()))
+      e.studentPhone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
     if (form.parentPhone2.trim() && !/^01[0-9]{9}$/.test(form.parentPhone2.trim()))
                                   e.parentPhone2 = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
     if (!form.servant)            e.servant = 'يرجى تحديد الخادم المسؤول';
@@ -430,7 +431,7 @@ export default function AddStudentPage() {
                 </select>
               </FormGroup>
               <div data-has-error={!!errors.parentName}>
-                <FormGroup label="اسم ولي الأمر" error={errors.parentName}>
+                <FormGroup label="اسم ولي الأمر" optional error={errors.parentName}>
                   <input value={form.parentName} onChange={e => set('parentName', e.target.value)}
                     placeholder="الاسم بالكامل" style={IS(errors.parentName)}
                     onFocus={e => e.target.style.borderColor = '#8B1A1A'}
@@ -440,7 +441,20 @@ export default function AddStudentPage() {
             </div>
 
             <div className="grid-form-2">
-              <FormGroup label="رقم ولي الأمر" optional error={errors.parentPhone2}>
+              <FormGroup label="رقم موبايل المخدوم (اختياري)" optional error={errors.studentPhone}>
+                <input type="tel" dir="ltr" value={form.studentPhone}
+                  onChange={e => set('studentPhone', e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  style={{ ...IS(errors.studentPhone), textAlign: 'right' }} />
+              </FormGroup>
+              <FormGroup label="اسم الأم" optional>
+                <input value={form.motherName} onChange={e => set('motherName', e.target.value)}
+                  placeholder="الاسم بالكامل" style={IS(false)} />
+              </FormGroup>
+            </div>
+
+            <div className="grid-form-2">
+              <FormGroup label="رقم آخر (اختياري)" optional error={errors.parentPhone2}>
                 <input type="tel" dir="ltr" value={form.parentPhone2}
                   onChange={e => set('parentPhone2', e.target.value)}
                   placeholder="01xxxxxxxxx"
@@ -449,7 +463,7 @@ export default function AddStudentPage() {
                   onBlur={e  => e.target.style.borderColor = errors.parentPhone2 ? '#FCA5A5' : '#E5E7EB'} />
               </FormGroup>
               <div data-has-error={!!errors.parentPhone}>
-                <FormGroup label="رقم الموبايل الشخصي للمخدوم" error={errors.parentPhone}>
+                <FormGroup label="رقم موبايل ولي الأمر" error={errors.parentPhone}>
                   <input type="tel" dir="ltr" value={form.parentPhone}
                     onChange={e => set('parentPhone', e.target.value)}
                     placeholder="01xxxxxxxxx"

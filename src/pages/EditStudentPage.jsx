@@ -127,7 +127,7 @@ const SERVANTS = [
 const EMPTY = {
   fullName: '', nickname: '', gender: 'ذكر', birthDate: '', grade: '',
   school: '',
-  parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '',
+  parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '', motherName: '', studentPhone: '',
   address: '', nearestChurch: '', servant: '', studentStatus: 'منتظم',
   notes: '', medicalNotes: '', hobbies: '',
 };
@@ -172,6 +172,8 @@ export default function EditStudentPage() {
           parentRelation: student.parent_relation || '',
           parentPhone: student.parent_phone || '',
           parentPhone2: student.parent_phone_2 || '',
+          motherName: student.mother_name || '',
+          studentPhone: student.student_phone || '',
           address: student.address || '',
           nearestChurch: student.nearest_church || '',
           servant: student.servant || '', 
@@ -203,10 +205,11 @@ export default function EditStudentPage() {
   function validate() {
     const e = {};
     if (!form.fullName.trim())      e.fullName      = 'الاسم الكامل مطلوب';
-    if (!form.parentName.trim())    e.parentName    = 'اسم ولي الأمر مطلوب';
     if (!form.parentPhone.trim())   e.parentPhone   = 'رقم الهاتف مطلوب';
     else if (!/^01[0-9]{9}$/.test(form.parentPhone.trim()))
                                     e.parentPhone   = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+    if (form.studentPhone.trim() && !/^01[0-9]{9}$/.test(form.studentPhone.trim()))
+      e.studentPhone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
     if (form.parentPhone2.trim() && !/^01[0-9]{9}$/.test(form.parentPhone2.trim()))
                                     e.parentPhone2  = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
     return e;
@@ -402,7 +405,7 @@ export default function EditStudentPage() {
                 </select>
               </FormGroup>
               <div data-has-error={!!errors.parentName}>
-                <FormGroup label="اسم ولي الأمر" error={errors.parentName}>
+                <FormGroup label="اسم ولي الأمر" optional error={errors.parentName}>
                   <input
                     value={form.parentName}
                     onChange={e => set('parentName', e.target.value)}
@@ -416,7 +419,20 @@ export default function EditStudentPage() {
             </div>
 
             <div className="grid-form-2">
-              <FormGroup label="رقم ولي الأمر" optional error={errors.parentPhone2}>
+              <FormGroup label="رقم موبايل المخدوم (اختياري)" optional error={errors.studentPhone}>
+                <input type="tel" dir="ltr" value={form.studentPhone}
+                  onChange={e => set('studentPhone', e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  style={{ ...IS(errors.studentPhone), textAlign: 'right' }} />
+              </FormGroup>
+              <FormGroup label="اسم الأم" optional>
+                <input value={form.motherName} onChange={e => set('motherName', e.target.value)}
+                  placeholder="الاسم بالكامل" style={IS(false)} />
+              </FormGroup>
+            </div>
+
+            <div className="grid-form-2">
+              <FormGroup label="رقم آخر (اختياري)" optional error={errors.parentPhone2}>
                 <input
                   type="tel" dir="ltr" value={form.parentPhone2}
                   onChange={e => set('parentPhone2', e.target.value)}
@@ -427,7 +443,7 @@ export default function EditStudentPage() {
                 />
               </FormGroup>
               <div data-has-error={!!errors.parentPhone}>
-                <FormGroup label="رقم الموبايل الشخصي للمخدوم" error={errors.parentPhone}>
+                <FormGroup label="رقم موبايل ولي الأمر" error={errors.parentPhone}>
                   <input
                     type="tel" dir="ltr" value={form.parentPhone}
                     onChange={e => set('parentPhone', e.target.value)}
