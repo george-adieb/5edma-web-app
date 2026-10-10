@@ -160,17 +160,40 @@ Deno.serve(async (req) => {
         if (!v.ok) return json({ success: false, message: v.message }, v.status === 200 ? 403 : v.status);
 
         const d = (body.data && typeof body.data === 'object' ? body.data : {}) as Record<string, unknown>;
+        console.log('[public-update-student-data] received data keys:', Object.keys(d));
 
-        // Whitelist: only these columns can ever be written. Empty values are
-        // skipped so a blank field never wipes existing data.
+        // Whitelist: only these columns can ever be written. Blank values are
+        // skipped (never wipe existing data) but any submitted-yet-rejected
+        // field is reported back in `ignored_fields`, never silently dropped.
+        const has = (x: unknown) => x !== undefined && x !== null && x !== '';
         const hobbies = typeof d.hobbies === 'string'
           ? d.hobbies.split(/[،,]/).map((h) => h.trim()).filter(Boolean).slice(0, 20)
-          : [];
+          : Array.isArray(d.hobbies) ? d.hobbies.map((h) => String(h).trim()).filter(Boolean).slice(0, 20) : [];
         const gender = str(d.gender, 10);
-        const lat = Number(d.latitude), lng = Number(d.longitude);
-        const hasLoc = d.latitude != null && d.longitude != null && d.latitude !== '' && d.longitude !== ''
-          && Number.isFinite(lat) && Number.isFinite(lng)
-          && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+        const lat = has(d.latitude) ? Number(d.latitude) : NaN;
+        const lng = has(d.longitude) ? Number(d.longitude) : NaN;
+        const hasLoc = Number.isFinite(lat) && Number.isFinite(lng)
+          && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180; // 0 is valid
+        // ── Server-side validation ───────────────────────────────────────────
+        const toLocalMobile = (raw: unknown): string | null => {
+          const v = phoneVariants(raw).find((x) => /^01[0-9]{9}$/.test(x));
+          return v ?? null; // normalised to 01xxxxxxxxx
+        };
+        const field_errors: Record<string, string> = {};
+        if (!str(d.name, 200)) field_errors.name = 'الاسم بالكامل مطلوب';
+        if (!str(d.grade, 60)) field_errors.grade = 'المرحلة الدراسية مطلوبة';
+        if (gender !== 'ذكر' && gender !== 'أنثى') field_errors.gender = 'النوع مطلوب';
+        if (!str(d.address, 500)) field_errors.address = 'العنوان التفصيلي مطلوب';
+        const parentMobile = toLocalMobile(d.parent_phone);
+        if (!str(d.parent_phone, 20)) field_errors.parent_phone = 'رقم موبايل ولي الأمر مطلوب';
+        else if (!parentMobile) field_errors.parent_phone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+        const studentMobile = has(d.student_phone) ? toLocalMobile(d.student_phone) : null;
+        if (has(d.student_phone) && !studentMobile) field_errors.student_phone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+        if (Object.keys(field_errors).length) {
+          console.log('[public-update-student-data] validation failed:', Object.keys(field_errors));
+          return json({ success: false, message: 'من فضلك راجع البيانات المدخلة', field_errors }, 422);
+        }
+
         const candidate: Record<string, unknown> = {
           name:           str(d.name, 200),
           birth_date:     str(d.birth_date, 20),
@@ -178,12 +201,13 @@ Deno.serve(async (req) => {
           grade:          str(d.grade, 60),
           school:         str(d.school, 200),
           mother_name:    str(d.mother_name, 200),
-          parent_phone:   str(d.parent_phone, 20),
-          student_phone:  str(d.student_phone, 20),
+          parent_phone:   parentMobile,
+          student_phone:  studentMobile,
           address:        str(d.address, 500),
           latitude:       hasLoc ? lat : null,
           longitude:      hasLoc ? lng : null,
           location_updated_at: hasLoc ? new Date().toISOString() : null,
+          medical_notes:  str(d.medical_notes, 1000),
           notes:          str(d.notes, 1000),
           hobbies:        hobbies.length ? hobbies : null,
         };
@@ -193,19 +217,33 @@ Deno.serve(async (req) => {
           const old = typeof cur?.notes === 'string' ? cur.notes.trim() : '';
           if (old) candidate.notes = `${old}\n---\n${candidate.notes}`;
         }
-        const update: Record<string, unknown> = {};
-        for (const [k, val] of Object.entries(candidate)) if (val !== null) update[k] = val;
+        const updatePayload: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(candidate)) if (val !== null) updatePayload[k] = val;
 
-        if (Object.keys(update).length === 0) {
-          return json({ success: false, message: 'من فضلك أدخل البيانات المطلوبة' }, 400);
+        // Fields the user sent with a value that did not make it into the payload.
+        const ignored_fields = Object.keys(d).filter((k) => has(d[k]) && !(k in updatePayload)
+          && k !== 'location_updated_at' && !(k === 'hobbies' && Array.isArray(d[k]) && !(d[k] as unknown[]).length));
+        console.log('[public-update-student-data] updatePayload keys:', Object.keys(updatePayload), 'ignored:', ignored_fields);
+
+        if (Object.keys(updatePayload).length === 0) {
+          return json({ success: false, message: 'من فضلك أدخل البيانات المطلوبة', ignored_fields }, 400);
         }
 
-        const { error } = await supabaseAdmin.from('students').update(update).eq('id', body.student_id as string);
+        const { error } = await supabaseAdmin.from('students').update(updatePayload).eq('id', body.student_id as string);
         if (error) {
-          console.error('[public-update-student-data] update:', error.message);
-          return json({ success: false, message: 'تعذّر حفظ البيانات' }, 500);
+          console.error('[public-update-student-data] update error:', error.code, error.message);
+          const missingColumn = error.code === '42703' || error.code === 'PGRST204';
+          return json({
+            success: false,
+            message: missingColumn
+              ? `عمود غير موجود في قاعدة البيانات: ${error.message}`
+              : 'تعذّر حفظ البيانات',
+            db_error: error.message,
+          }, 500);
         }
-        return json({ success: true });
+
+        // Never echo stored values back: the caller may only learn which keys were written.
+        return json({ success: true, updated_fields: Object.keys(updatePayload), ignored_fields });
       }
 
       default:

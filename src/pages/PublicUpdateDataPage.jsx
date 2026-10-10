@@ -35,15 +35,17 @@ const SEL = { ...IS, backgroundImage: ARROW, backgroundRepeat: 'no-repeat', back
 // Always empty — old stored data is never prefilled.
 const EMPTY_FORM = {
   name: '', birth_date: '', gender: '', grade: '', school: '', mother_name: '',
-  parent_phone: '', student_phone: '', address: '', latitude: null, longitude: null,
-  notes: '', hobbies: '',
+  parent_phone: '', student_phone: '', address: '',   notes: '', hobbies: '',
 };
 
-function Field({ label, children }) {
+function Field({ label, required, error, children }) {
   return (
-    <div style={{ marginBottom: '14px', textAlign: 'right' }}>
-      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>{label}</label>
+    <div style={{ marginBottom: '14px', textAlign: 'right' }} data-has-error={!!error}>
+      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+        {label}{required && <span style={{ color: '#DC2626' }}> *</span>}
+      </label>
       {children}
+      {error && <p style={{ fontSize: '12px', color: '#DC2626', marginTop: '6px' }}>{error}</p>}
     </div>
   );
 }
@@ -69,7 +71,10 @@ export default function PublicUpdateDataPage() {
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [done, setDone] = useState(false);
+  const [errors, setErrors] = useState({});
   const [mapOpen, setMapOpen] = useState(false);
+  // Only ever set by the user in this session; old saved location is never loaded.
+  const [selectedLocation, setSelectedLocation] = useState(null);
 
   useEffect(() => {
     callFn({ action: 'list_students' }).then(res => {
@@ -88,6 +93,7 @@ export default function PublicUpdateDataPage() {
     if (res.success) {
       setVerified(true);
       setForm(EMPTY_FORM);
+      setSelectedLocation(null);
     } else {
       setVerified(false);
       setVerifyError(res.message === 'الرقم غير مطابق للبيانات المسجلة'
@@ -96,19 +102,58 @@ export default function PublicUpdateDataPage() {
     }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setSaving(true);
-    setSubmitError('');
-    const res = await callFn({
-      action: 'submit_update', student_id: studentId, verification_phone: phone, data: form,
-    });
-    setSaving(false);
-    if (res.success) setDone(true);
-    else setSubmitError(res.message || 'تعذّر حفظ البيانات');
+  const MOBILE = /^01[0-9]{9}$/;
+  function validate() {
+    const e = {};
+    if (!form.name.trim()) e.name = 'الاسم بالكامل مطلوب';
+    if (!form.grade) e.grade = 'المرحلة الدراسية مطلوبة';
+    if (!form.gender) e.gender = 'النوع مطلوب';
+    if (!form.address.trim()) e.address = 'العنوان التفصيلي مطلوب';
+    const pp = form.parent_phone.replace(/[\s\-()]/g, '');
+    if (!pp) e.parent_phone = 'رقم موبايل ولي الأمر مطلوب';
+    else if (!MOBILE.test(pp)) e.parent_phone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+    const sp = form.student_phone.replace(/[\s\-()]/g, '');
+    if (sp && !MOBILE.test(sp)) e.student_phone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+    return e;
   }
 
-  const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const found = validate();
+    setErrors(found);
+    if (Object.keys(found).length) {
+      setSubmitError('');
+      setTimeout(() => document.querySelector('[data-has-error="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+      return;
+    }
+    setSaving(true);
+    setSubmitError('');
+    const { latitude, longitude } = selectedLocation || {};
+    const data = {
+      name: form.name, birth_date: form.birth_date, gender: form.gender, grade: form.grade,
+      school: form.school, mother_name: form.mother_name,
+      parent_phone: form.parent_phone, student_phone: form.student_phone,
+      address: form.address,
+      latitude: latitude ?? null, longitude: longitude ?? null,
+      location_updated_at: selectedLocation ? new Date().toISOString() : null,
+      notes: form.notes, hobbies: form.hobbies,
+    };
+    console.log('[update-data] submit payload →', { student_id: studentId, data });
+    const res = await callFn({
+      action: 'submit_update', student_id: studentId, verification_phone: phone, data,
+    });
+    console.log('[update-data] submit response →', res);
+    setSaving(false);
+    if (res.success) {
+      if (res.ignored_fields?.length) console.warn('[update-data] fields not saved:', res.ignored_fields);
+      setDone(true);
+    } else {
+      if (res.field_errors) setErrors(res.field_errors);
+      setSubmitError(res.message || 'تعذّر حفظ البيانات');
+    }
+  }
+
+  const set = (k) => (e) => { setForm(p => ({ ...p, [k]: e.target.value })); setErrors(p => (p[k] ? { ...p, [k]: '' } : p)); };
   const input = (k, props = {}) => <input style={IS} value={form[k]} onChange={set(k)} {...props} />;
 
   return (
@@ -118,8 +163,7 @@ export default function PublicUpdateDataPage() {
         {done ? (
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <CheckCircle2 size={48} color="#16A34A" />
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#111827', marginTop: '12px' }}>تم حفظ البيانات بنجاح</h2>
-            <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '6px' }}>شكراً لك</p>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#111827', marginTop: '12px' }}>تم تحديث البيانات بنجاح، شكرًا لتعاونكم</h2>
           </div>
         ) : !verified ? (
           <form onSubmit={handleVerify}>
@@ -155,19 +199,19 @@ export default function PublicUpdateDataPage() {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#111827', marginBottom: '16px' }}>تحديث بيانات المخدوم</h1>
             {submitError && <ErrorBox>{submitError}</ErrorBox>}
-            <Field label="الاسم بالكامل">{input('name')}</Field>
+            <Field label="الاسم بالكامل" required error={errors.name}>{input('name')}</Field>
             <Field label="تاريخ الميلاد">{input('birth_date', { type: 'date' })}</Field>
-            <Field label="النوع">
+            <Field label="النوع" required error={errors.gender}>
               <select style={SEL} value={form.gender} onChange={set('gender')}>
                 <option value="">— اختر —</option>
                 <option value="ذكر">ذكر</option>
                 <option value="أنثى">أنثى</option>
               </select>
             </Field>
-            <Field label="المرحلة الدراسية">
+            <Field label="المرحلة الدراسية" required error={errors.grade}>
               <select style={SEL} value={form.grade} onChange={set('grade')}>
                 <option value="">— اختر —</option>
                 {GRADES.filter(g => g.id).map(g => <option key={g.id} value={g.label}>{g.label}</option>)}
@@ -175,12 +219,12 @@ export default function PublicUpdateDataPage() {
             </Field>
             <Field label="المدرسة">{input('school')}</Field>
             <Field label="اسم الأم">{input('mother_name')}</Field>
-            <Field label="رقم موبايل ولي الأمر">{input('parent_phone', { type: 'tel', inputMode: 'tel', required: true, style: { ...IS, direction: 'ltr', textAlign: 'right' } })}</Field>
-            <Field label="رقم موبايل المخدوم (اختياري)">
+            <Field label="رقم موبايل ولي الأمر" required error={errors.parent_phone}>{input('parent_phone', { type: 'tel', inputMode: 'tel', style: { ...IS, direction: 'ltr', textAlign: 'right' } })}</Field>
+            <Field label="رقم موبايل المخدوم (اختياري)" error={errors.student_phone}>
               {input('student_phone', { type: 'tel', inputMode: 'tel', style: { ...IS, direction: 'ltr', textAlign: 'right' } })}
               <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '6px' }}>اكتب رقم المخدوم الشخصي إن وجد</p>
             </Field>
-            <Field label="العنوان التفصيلي">
+            <Field label="العنوان التفصيلي" required error={errors.address}>
               {input('address', { placeholder: 'مثال: شارع، رقم العمارة، الدور، علامة مميزة...' })}
             </Field>
             <Field label="موقع البيت على الخريطة">
@@ -188,10 +232,10 @@ export default function PublicUpdateDataPage() {
                 <button type="button" onClick={() => setMapOpen(true)} style={{
                   padding: '10px 14px', minHeight: '44px', border: '1.5px solid #8B1A1A', borderRadius: '8px', background: 'white', color: '#8B1A1A',
                   fontFamily: 'Cairo, sans-serif', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                }}>{form.latitude ? 'تعديل الموقع' : 'تحديد الموقع على الخريطة'}</button>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: form.latitude ? '#16A34A' : '#6B7280' }}>
-                  {form.latitude ? 'تم تحديد الموقع على الخريطة' : 'لم يتم تحديد الموقع بعد'}
-                  <MapPin size={16} color={form.latitude ? '#16A34A' : '#9CA3AF'} />
+                }}>{selectedLocation ? 'تعديل الموقع' : 'تحديد الموقع على الخريطة'}</button>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: selectedLocation ? '#16A34A' : '#6B7280' }}>
+                  {selectedLocation ? 'تم تحديد الموقع على الخريطة' : 'لم يتم تحديد الموقع بعد'}
+                  <MapPin size={16} color={selectedLocation ? '#16A34A' : '#9CA3AF'} />
                 </span>
               </div>
             </Field>
@@ -214,10 +258,10 @@ export default function PublicUpdateDataPage() {
       <LocationPickerModal
         isOpen={mapOpen}
         onClose={() => setMapOpen(false)}
-        initialLat={form.latitude}
-        initialLng={form.longitude}
+        initialLat={selectedLocation?.latitude ?? null}
+        initialLng={selectedLocation?.longitude ?? null}
         studentName="موقع البيت"
-        onSave={async (lat, lng) => { setForm(p => ({ ...p, latitude: lat, longitude: lng })); }}
+        onSave={async (lat, lng) => { setSelectedLocation({ latitude: lat, longitude: lng }); }}
       />
     </div>
   );

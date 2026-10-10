@@ -507,6 +507,22 @@ export default function StudentProfilePage() {
             </div>
           </div>
 
+          {/* Notes (saved from the public update form / Add-Edit student) */}
+          <div style={{
+            background: 'white', borderRadius: '12px', padding: '16px 18px',
+            border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '16px' }}>📝</span>
+              <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>ملاحظات</h3>
+            </div>
+            {student.notes ? (
+              <p style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{student.notes}</p>
+            ) : (
+              <p style={{ fontSize: '13px', color: '#9CA3AF', margin: 0 }}>لا توجد ملاحظات</p>
+            )}
+          </div>
+
           {/* Hobbies */}
           <div style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
