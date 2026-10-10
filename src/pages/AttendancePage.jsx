@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Save, CheckCircle, Loader2, ChevronRight, ChevronLeft, ClipboardList } from 'lucide-react';
+import BulkAttendanceModal from '../components/BulkAttendanceModal';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchStudents, fetchAttendanceForDate, saveAttendance, fetchLastAttendancesBeforeDate, addAttendancePointsIfNeeded } from '../lib/database';
 import {
@@ -39,6 +40,7 @@ export default function AttendancePage() {
   const [saved,      setSaved]      = useState(false);
   const [page,       setPage]       = useState(1);
   const [perPage,    setPerPage]    = useState(10);
+  const [bulkOpen,   setBulkOpen]   = useState(false);
 
   const { profile } = useAuth();
   
@@ -140,6 +142,28 @@ export default function AttendancePage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // ── Bulk attendance handler ─────────────────────────────────────────────
+  async function handleBulkConfirm(newAttendance) {
+    // Merge bulk result into existing attendance (bulk overrides only scoped students)
+    const merged = { ...attendance, ...newAttendance };
+    setAttendance(merged);
+    setSaved(false);
+
+    // Save to DB immediately
+    const scopedMerged = Object.fromEntries(
+      Object.entries(merged).filter(([id]) => scopedIds.has(String(id)))
+    );
+    await saveAttendance(scopedMerged, selectedFriday);
+    await addAttendancePointsIfNeeded({
+      attendance: scopedMerged,
+      attendanceDate: selectedFriday,
+      createdBy: profile?.id,
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    setBulkOpen(false);
   }
 
   const pillBtn = (active, onClick, label) => (
@@ -298,6 +322,18 @@ export default function AttendancePage() {
                 minHeight: '36px', whiteSpace: 'nowrap',
               }}
             >تحديد الكل حاضر</button>
+            <button
+              onClick={() => setBulkOpen(true)}
+              style={{
+                padding: '6px 12px', borderRadius: '8px', cursor: 'pointer',
+                fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '12px',
+                border: '1.5px solid #1D4ED8', color: '#1D4ED8', background: '#EFF6FF',
+                minHeight: '36px', whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: '5px',
+              }}
+            >
+              <ClipboardList size={14} /> إدخال حضور من قائمة أسماء
+            </button>
           </StudentFilterBar>
 
           {/* Student list */}
@@ -481,6 +517,15 @@ export default function AttendancePage() {
           </div>
         </>
       )}
+
+      {/* Bulk Attendance Modal */}
+      <BulkAttendanceModal
+        isOpen={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        students={filtered}
+        onConfirm={handleBulkConfirm}
+        selectedDate={selectedFriday}
+      />
     </div>
   );
 }
