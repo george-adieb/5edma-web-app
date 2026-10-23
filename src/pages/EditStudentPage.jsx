@@ -1,3 +1,4 @@
+import StudentStatusField, { validateStatusReason } from '../components/StudentStatusField';
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -128,7 +129,7 @@ const EMPTY = {
   fullName: '', nickname: '', gender: 'ذكر', birthDate: '', grade: '',
   school: '',
   parentName: '', parentRelation: '', parentPhone: '', parentPhone2: '', motherName: '', studentPhone: '',
-  address: '', nearestChurch: '', servant: '', studentStatus: 'منتظم',
+  address: '', nearestChurch: '', servant: '', studentStatus: 'منتظم', interruptionReason: '',
   notes: '', medicalNotes: '', hobbies: '',
 };
 
@@ -178,6 +179,7 @@ export default function EditStudentPage() {
           nearestChurch: student.nearest_church || '',
           servant: student.servant || '', 
           studentStatus: student.status || 'منتظم',
+          interruptionReason: student.interruption_reason || '',
           notes: student.notes || '',
           medicalNotes: student.medical_notes || '',
           hobbies: hobbiesText,
@@ -212,6 +214,8 @@ export default function EditStudentPage() {
       e.studentPhone = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
     if (form.parentPhone2.trim() && !/^01[0-9]{9}$/.test(form.parentPhone2.trim()))
                                     e.parentPhone2  = 'رقم غير صحيح (مثال: 01xxxxxxxxx)';
+    const reasonErr = validateStatusReason(form.studentStatus, form.interruptionReason);
+    if (reasonErr) e.interruptionReason = reasonErr;
     return e;
   }
 
@@ -262,17 +266,17 @@ export default function EditStudentPage() {
 
       {/* Breadcrumb */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
+        display: 'flex', alignItems: 'center', gap: '4px 8px', flexWrap: 'wrap',
         marginBottom: '18px', justifyContent: 'flex-end',
       }}>
         <span style={{ fontSize: '14px', fontWeight: 800, color: '#8B1A1A' }}>تعديل بيانات المخدوم</span>
         <span style={{ color: '#D1D5DB', fontSize: '13px' }}>‹</span>
-        <button onClick={() => navigate(`/students/${id}`)} style={{
+        <button onClick={() => navigate(`/students/${id}`)} style={{ whiteSpace: 'nowrap',
           fontSize: '13px', color: '#6B7280', background: 'none',
           border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif',
         }}>ملف المخدوم</button>
         <span style={{ color: '#D1D5DB', fontSize: '13px' }}>‹</span>
-        <button onClick={() => navigate('/students')} style={{
+        <button onClick={() => navigate('/students')} style={{ whiteSpace: 'nowrap',
           fontSize: '13px', color: '#6B7280', background: 'none',
           border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif',
         }}>المخدومين</button>
@@ -459,7 +463,7 @@ export default function EditStudentPage() {
 
           {/* Action buttons — responsive via CSS class */}
           <div className="mob-form-actions">
-            <button onClick={() => navigate('/students')} style={{
+            <button onClick={() => navigate('/students')} style={{ whiteSpace: 'nowrap',
               padding: '10px 20px', borderRadius: '9px',
               background: 'transparent', border: 'none',
               fontFamily: 'Cairo, sans-serif', fontWeight: 700,
@@ -565,44 +569,13 @@ export default function EditStudentPage() {
 
             {/* Status radio group */}
             <FormGroup label="حالة المتابعة الأولية">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px' }}>
-                {[
-                  { value: 'منتظم',          label: 'مخدوم منتظم',              sub: 'يحضر بانتظام', color: '#16A34A', bg: '#F0FDF4', border: '#86EFAC' },
-                  { value: 'جديد',            label: 'مخدوم جديد (يحتاج زيارة)', sub: 'أول مرة', color: '#1D4ED8', bg: '#EFF6FF', border: '#93C5FD' },
-                  { value: 'يحتاج افتقاد',   label: 'منقطع (يحتاج افتقاد)',    sub: 'غائب فترة', color: '#DC2626', bg: '#FEF2F2', border: '#FCA5A5' },
-                ].map(opt => (
-                  <label key={opt.value} style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 14px', borderRadius: '9px', cursor: 'pointer',
-                    border: `1.5px solid ${form.studentStatus === opt.value ? opt.border : '#F3F4F6'}`,
-                    background: form.studentStatus === opt.value ? opt.bg : 'white',
-                    transition: 'all 0.15s',
-                  }}>
-                    <div style={{ textAlign: 'right', flex: 1 }}>
-                      <p style={{ fontSize: '13px', fontWeight: 700, color: form.studentStatus === opt.value ? opt.color : '#374151' }}>
-                        {opt.label}
-                      </p>
-                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '1px' }}>{opt.sub}</p>
-                    </div>
-                    <div style={{
-                      width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${form.studentStatus === opt.value ? opt.color : '#D1D5DB'}`,
-                      background: form.studentStatus === opt.value ? opt.color : 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}>
-                      {form.studentStatus === opt.value && (
-                        <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'white' }} />
-                      )}
-                    </div>
-                    <input type="radio" name="status" value={opt.value}
-                      checked={form.studentStatus === opt.value}
-                      onChange={() => set('studentStatus', opt.value)}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-                ))}
-              </div>
+              <StudentStatusField
+                status={form.studentStatus}
+                reason={form.interruptionReason}
+                onStatusChange={v => set('studentStatus', v)}
+                onReasonChange={v => set('interruptionReason', v)}
+                error={errors.interruptionReason}
+              />
             </FormGroup>
           </SectionCard>
 

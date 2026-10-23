@@ -10,7 +10,8 @@ import FollowUpMapPage from './pages/FollowUpMapPage';
 import SettingsPage from './pages/SettingsPage';
 import AddStudentPage from './pages/AddStudentPage';
 import EditStudentPage from './pages/EditStudentPage';
-import AddServantPage from './pages/AddServantPage';
+import UserManagementPage from './pages/UserManagementPage';
+import StageServantsPage from './pages/StageServantsPage';
 import LoginPage from './pages/LoginPage';
 import MyPointsPage from './pages/MyPointsPage';
 import PublicUpdateDataPage from './pages/PublicUpdateDataPage';
@@ -32,7 +33,23 @@ function ProtectedRoute({ children }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
+
   return children;
+}
+
+// Client-side route guard (UX only — the real enforcement is in RLS and the Edge Functions).
+function RoleRoute({ roles, children }) {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  if (!roles.includes(profile.role)) return <Navigate to="/" replace />;
+  return children;
+}
+
+function NewServantRedirect() {
+  const { profile } = useAuth();
+  if (profile?.role === 'ADMIN') return <Navigate to="/settings/users" replace />;
+  if (profile?.role === 'SERVICE_HEAD') return <Navigate to="/servants/manage" replace />;
+  return <Navigate to="/servants" replace />;
 }
 
 const router = createBrowserRouter([
@@ -63,10 +80,12 @@ const router = createBrowserRouter([
       { path: 'students/edit/:id', element: <EditStudentPage /> },
       { path: 'students/:id', element: <StudentProfilePage /> },
       { path: 'servants', element: <ServantsPage /> },
-      { path: 'servants/new', element: <AddServantPage /> },
+      { path: 'servants/new', element: <NewServantRedirect /> },
+      { path: 'servants/manage', element: <RoleRoute roles={['SERVICE_HEAD']}><StageServantsPage /></RoleRoute> },
       { path: 'followup', element: <FollowUpPage /> },
       { path: 'followup/map', element: <FollowUpMapPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/users', element: <RoleRoute roles={['ADMIN']}><UserManagementPage /></RoleRoute> },
       { path: 'settings/yearly-promotion', element: <YearlyPromotionPage /> },
       { path: 'ai-assistant', element: <AIAssistantPage /> },
     ],

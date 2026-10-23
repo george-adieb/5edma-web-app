@@ -225,7 +225,7 @@ export default function BulkAttendanceModal({ isOpen, onClose, students, onConfi
         position: 'relative', zIndex: 1,
         background: 'white', borderRadius: '16px',
         width: '100%', maxWidth: '620px',
-        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+        maxHeight: '90dvh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
         animation: 'modalIn 0.25s ease',
         fontFamily: 'Cairo, sans-serif',

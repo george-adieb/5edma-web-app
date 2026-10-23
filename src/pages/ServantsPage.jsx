@@ -81,15 +81,13 @@ export default function ServantsPage() {
       let scopedData = data || [];
       if (currentProfile.role === 'SERVICE_HEAD') {
          const myGrades = Array.isArray(currentProfile.assigned_grades) ? currentProfile.assigned_grades : (currentProfile.assigned_grade ? [currentProfile.assigned_grade] : []);
+         // Defence in depth: the database only returns rows this leader may see (themselves + the
+         // servants of their grades + gender). Never show الأمانة العامة / other leaders here.
          scopedData = data.filter(p => {
              if (p.id === currentProfile.id) return true;
-             if (p.role === 'ADMIN' || p.role === 'GENERAL_SECRETARIAT') return true;
-             if (p.role === 'SERVANT' && myGrades.includes(p.assigned_grade)) return true;
-             if (p.role === 'SERVICE_HEAD') {
-                 const theirGrades = Array.isArray(p.assigned_grades) ? p.assigned_grades : [];
-                 return theirGrades.some(g => myGrades.includes(g));
-             }
-             return false;
+             if (p.role !== 'SERVANT') return false;
+             const theirs = [...(p.assigned_grades || []), ...(p.assigned_grade ? [p.assigned_grade] : [])];
+             return p.assigned_gender === currentProfile.assigned_gender && theirs.some(g => myGrades.includes(g));
          });
       }
 
@@ -132,12 +130,9 @@ export default function ServantsPage() {
     if (!currentProfile) return false;
     if (targetProfile.id === currentProfile.id) return false;
     if (currentProfile.role === 'SERVANT') return false;
-    if (currentProfile.role === 'ADMIN' || currentProfile.role === 'GENERAL_SECRETARIAT') return true;
-    if (currentProfile.role === 'SERVICE_HEAD') {
-        if (targetProfile.role !== 'SERVANT') return false;
-        const myGrades = Array.isArray(currentProfile.assigned_grades) ? currentProfile.assigned_grades : (currentProfile.assigned_grade ? [currentProfile.assigned_grade] : []);
-        return myGrades.includes(targetProfile.assigned_grade);
-    }
+    if (targetProfile.role === 'ADMIN' || targetProfile.role === 'GENERAL_SECRETARIAT') return false;
+    if (currentProfile.role === 'ADMIN') return true;
+    // SERVICE_HEAD cannot delete accounts (server enforces admin-only)
     return false;
   }
 
@@ -305,7 +300,7 @@ export default function ServantsPage() {
             {/* Role pills */}
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#9CA3AF', whiteSpace: 'nowrap' }}>الدور</span>
-              {ROLE_PILLS.map(r => (
+              {ROLE_PILLS.filter(r => currentProfile?.role === 'ADMIN' || (r.id !== 'ADMIN' && r.id !== 'GENERAL_SECRETARIAT')).map(r => (
                 <span key={r.id}>{pillBtn(roleFilter === r.id, () => { setRoleFilter(r.id); setPage(1); }, r.label)}</span>
               ))}
             </div>

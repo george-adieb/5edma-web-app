@@ -1,7 +1,8 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot, MapPin,
+  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot, MapPin, UserCog, ShieldCheck,
 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
@@ -55,9 +56,13 @@ function ContextualAddBtn({ onClose }) {
 }
 
 export default function Sidebar({ onClose }) {
-  const { profile } = useAuth();
+  const { profile, logout } = useAuth();
 
-  const filteredNavItems = navItems.filter(item => {
+  const roleItems = [];
+  if (profile?.role === 'ADMIN') roleItems.push({ to: '/settings/users', icon: UserCog, label: 'إدارة المستخدمين' });
+  if (profile?.role === 'SERVICE_HEAD') roleItems.push({ to: '/servants/manage', icon: ShieldCheck, label: 'إدارة خدام المرحلة' });
+
+  const filteredNavItems = [...navItems, ...roleItems].filter(item => {
     if (profile?.role === 'SERVANT') {
       if (item.to === '/servants' || item.to === '/settings') {
         return false;
@@ -142,8 +147,22 @@ export default function Sidebar({ onClose }) {
         ))}
       </nav>
 
-      <div style={{ padding: '12px 12px 20px' }}>
+      <div style={{ padding: '12px 12px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <ContextualAddBtn onClose={onClose} />
+        {/* Logout inside the drawer (phones) — the top bar icon is easy to miss */}
+        <button
+          className="mob-show"
+          onClick={() => { onClose?.(); logout(); }}
+          style={{
+            width: '100%', padding: '11px 16px', borderRadius: '10px', cursor: 'pointer',
+            background: 'white', color: '#8B1A1A', border: '1.5px solid #E5E7EB',
+            fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '13px',
+            alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '44px',
+          }}
+        >
+          <LogOut size={15} />
+          تسجيل الخروج
+        </button>
       </div>
     </aside>
   );

@@ -4,6 +4,7 @@ export function Badge({ type, children }) {
     منتظم: 'badge badge-green',
     جديد: 'badge badge-blue',
     'يحتاج افتقاد': 'badge badge-red',
+    'منقطع بسبب': 'badge badge-gray',
     حاضر: 'badge badge-green',
     غائب: 'badge badge-red',
     معتذر: 'badge badge-yellow',

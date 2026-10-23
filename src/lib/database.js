@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
 import { GRADE_LABEL_MAP } from '../data/constants';
 import { getRecentFridays } from './attendanceCycle';
+import { applyStudentScope, isAdminRole } from './access';
+import { isFollowUpExempt, eligibleAttendance, INTERRUPTED_WITH_REASON } from './followUpEligibility';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -9,16 +11,22 @@ function todayISO() {
 }
 
 /**
- * Apply grade/gender scoping to a Supabase query for SERVANT role.
- * For any other role (or if profile is null) the query is returned unchanged.
+ * Scope a `students` query to what the caller may see (see lib/access.js).
+ * RLS enforces the same rule in the database; this keeps queries explicit and deny-by-default.
  */
-function applyServantScope(query, profile) {
-  if (profile?.role === 'SERVANT') {
-    query = query.eq('grade', profile.assigned_grade).eq('gender', profile.assigned_gender);
-  }
-  return query;
-}
+const applyServantScope = applyStudentScope;
 
+/**
+ * Resolve author names for logs. profiles can't be read across users any more, so this goes through
+ * the profile_display_names() RPC (general-secretariat accounts show as الأمانة العامة to non-admins).
+ */
+async function fetchDisplayNames(ids) {
+  const unique = [...new Set((ids || []).filter(Boolean))];
+  if (unique.length === 0) return {};
+  const { data, error } = await supabase.rpc('profile_display_names', { p_ids: unique });
+  if (error) { console.warn('[fetchDisplayNames] error:', error.message); return {}; }
+  return Object.fromEntries((data || []).map(r => [r.id, r.display_name]));
+}
 
 // ─── STUDENTS ─────────────────────────────────────────────────────────────────
 
@@ -76,12 +84,9 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
   // When scoped to a servant, first get the IDs of students in their group
   // so we only process attendance records for those students.
   let scopedStudentIds = null;
-  if (profile?.role === 'SERVANT') {
-    const { data: scopedStudents, error: scopeErr } = await supabase
-      .from('students')
-      .select('id')
-      .eq('grade', profile.assigned_grade)
-      .eq('gender', profile.assigned_gender);
+  if (!isAdminRole(profile)) {
+    const { data: scopedStudents, error: scopeErr } = await applyStudentScope(
+      supabase.from('students').select('id'), profile);
     if (scopeErr) throw scopeErr;
     scopedStudentIds = (scopedStudents || []).map(s => s.id);
     if (scopedStudentIds.length === 0) return [];
@@ -100,9 +105,20 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
   if (error) throw error;
   if (!records || records.length === 0) return [];
 
+  // Eligibility (single rule, see lib/followUpEligibility.js):
+  //   • status 'منقطع بسبب' → never an automatic follow-up candidate
+  //   • attendance on/before follow_up_baseline_date (set when leaving that status) is ignored
+  const { data: eligibilityRows, error: eligErr } = await applyStudentScope(
+    supabase.from('students').select('id, status, follow_up_baseline_date'), profile);
+  if (eligErr) throw eligErr;
+  const studentMeta = Object.fromEntries((eligibilityRows || []).map(s => [String(s.id), s]));
+
   // Group records by student_id, sorted newest → oldest
   const byStudent = {};
   for (const rec of records) {
+    const meta = studentMeta[String(rec.student_id)];
+    if (!meta || isFollowUpExempt(meta)) continue;
+    if (!eligibleAttendance([rec], meta).length) continue;
     if (!byStudent[rec.student_id]) byStudent[rec.student_id] = [];
     byStudent[rec.student_id].push(rec);
   }
@@ -318,6 +334,8 @@ export async function insertStudent(studentData) {
     // falls back to the raw servant value (UUID) if name wasn't resolved.
     servant:       studentData.servantName || studentData.servant || null,
     status:        studentData.studentStatus || 'منتظم',
+    // Private; the database requires it for 'منقطع بسبب' and clears it for every other status.
+    interruption_reason: studentData.studentStatus === INTERRUPTED_WITH_REASON ? (studentData.interruptionReason || '').trim() : null,
     medical_notes: studentData.medicalNotes  || null,
     hobbies:       hobbiesList,
     avatar,
@@ -365,6 +383,8 @@ export async function updateStudent(id, studentData) {
     nearest_church: studentData.nearestChurch || null,
     servant:       studentData.servant       || null,
     status:        studentData.studentStatus || 'منتظم',
+    // Private; the database requires it for 'منقطع بسبب' and clears it for every other status.
+    interruption_reason: studentData.studentStatus === INTERRUPTED_WITH_REASON ? (studentData.interruptionReason || '').trim() : null,
     medical_notes: studentData.medicalNotes  || null,
     hobbies:       hobbiesList,
     notes:         studentData.notes         || null,
@@ -421,21 +441,7 @@ export async function fetchStudentsForFollowUpMap(profile = null) {
   const fields = 'id, name, code, grade, status, gender, parent_phone, parent_phone_2, latitude, longitude, address';
   let query = supabase.from('students').select(fields);
 
-  const role = profile?.role;
-
-  if (role === 'SERVANT') {
-    query = query
-      .eq('grade', profile.assigned_grade)
-      .eq('gender', profile.assigned_gender);
-  } else if (role === 'SERVICE_HEAD') {
-    const grades = Array.isArray(profile.assigned_grades)
-      ? profile.assigned_grades
-      : profile.assigned_grade ? [profile.assigned_grade] : [];
-    if (grades.length > 0) {
-      query = query.in('grade', grades);
-    }
-  }
-  // ADMIN and any other privileged role: no extra filter
+  query = applyStudentScope(query, profile);
 
   const { data, error } = await query.order('name');
   if (error) throw error;
@@ -684,12 +690,9 @@ export async function upsertFollowUp(followUpData) {
 export async function fetchFollowUpLogs(limit = 10, studentId = null, profile = null) {
   // Scope to SERVANT group if applicable
   let scopedStudentIds = null;
-  if (profile?.role === 'SERVANT' && !studentId) {
-    const { data: scopedStudents, error: scopeErr } = await supabase
-      .from('students')
-      .select('id')
-      .eq('grade', profile.assigned_grade)
-      .eq('gender', profile.assigned_gender);
+  if (!isAdminRole(profile) && !studentId) {
+    const { data: scopedStudents, error: scopeErr } = await applyStudentScope(
+      supabase.from('students').select('id'), profile);
     if (scopeErr) throw scopeErr;
     scopedStudentIds = (scopedStudents || []).map(s => s.id);
     if (scopedStudentIds.length === 0) return []; // No students -> no logs
@@ -699,8 +702,7 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null, profile = 
     .from('follow_up_logs')
     .select(`
       *,
-      students!student_id (name),
-      profiles!recorded_by (full_name)
+      students!student_id (name)
     `)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -714,12 +716,13 @@ export async function fetchFollowUpLogs(limit = 10, studentId = null, profile = 
   const { data, error } = await query;
   if (error) throw error;
   
+  const authorNames = await fetchDisplayNames(data.map(l => l.recorded_by));
   return data.map(log => ({
     ...log,
     // Derive student_name from join
     student_name: log.students?.name || 'مخدوم غير معروف',
-    // Servant name derived from profiles
-    servant_name: log.profiles?.full_name || log.recorded_by,
+    // Author name: resolved through profile_display_names() (admins appear as الأمانة العامة)
+    servant_name: authorNames[log.recorded_by] || '—',
     time: timeAgo(log.created_at),
   }));
 }
@@ -826,12 +829,9 @@ export async function fetchDashboardStats(fridayDate, profile = null) {
 
   // For scoped attendance we need the student IDs first (only for SERVANT)
   let scopedStudentIds = null;
-  if (profile?.role === 'SERVANT') {
-    const { data: scopedStudents } = await supabase
-      .from('students')
-      .select('id')
-      .eq('grade', profile.assigned_grade)
-      .eq('gender', profile.assigned_gender);
+  if (!isAdminRole(profile)) {
+    const { data: scopedStudents } = await applyStudentScope(
+      supabase.from('students').select('id'), profile);
     scopedStudentIds = (scopedStudents || []).map(s => s.id);
   }
 
@@ -858,7 +858,7 @@ export async function fetchDashboardStats(fridayDate, profile = null) {
     // 3 — small set of students for the avatar row (scoped)
     avatarQuery,
     // 4 — total servants (not scoped — servants are global)
-    supabase.from('profiles').select('*', { count: 'exact', head: true }),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['SERVANT', 'SERVICE_HEAD']),
   ]);
 
   const safe = (i, fallback) =>
@@ -908,14 +908,17 @@ export async function fetchAbsentForDate(date = todayISO(), profile = null) {
   const ids = absences.map(r => r.student_id);
   let studsQuery = supabase
     .from('students')
-    .select('id, name, grade, avatar, avatar_color, parent_phone')
+    .select('id, name, grade, avatar, avatar_color, parent_phone, status, follow_up_baseline_date')
     .in('id', ids);
-  // For SERVANT: further restrict to only their assigned group
+  // Restrict to the caller's grades/gender (also enforced by RLS)
   studsQuery = applyServantScope(studsQuery, profile);
-  studsQuery = studsQuery.limit(10);
   const { data: studs, error: e2 } = await studsQuery;
   if (e2) throw e2;
-  return studs || [];
+  // absences dated on/before the reactivation baseline are history, not new follow-ups
+  return (studs || [])
+    .filter(s => !isFollowUpExempt(s))   // exempt students never appear as pending follow-up
+    .filter(s => eligibleAttendance([{ attendance_date: date }], s).length > 0)
+    .slice(0, 10);
 }
 
 /** @deprecated Use fetchAbsentForDate(date) instead */
@@ -1166,8 +1169,7 @@ export async function fetchStudentPointsLogs(studentId, limit = 50) {
     .from('student_points_logs')
     .select(`
       id, student_id, points, reason, source,
-      attendance_record_id, created_at,
-      profiles!created_by (full_name)
+      attendance_record_id, created_at, created_by
     `)
     .eq('student_id', studentId)
     .order('created_at', { ascending: false })
@@ -1176,9 +1178,10 @@ export async function fetchStudentPointsLogs(studentId, limit = 50) {
     console.error('[fetchStudentPointsLogs] error:', error);
     throw error;
   }
+  const names = await fetchDisplayNames((data || []).map(l => l.created_by));
   return (data || []).map(log => ({
     ...log,
-    created_by_name: log.profiles?.full_name || '—',
+    created_by_name: names[log.created_by] || '—',
     time: timeAgo(log.created_at),
   }));
 }
@@ -1354,99 +1357,22 @@ function isActiveServant(status) {
  * @param {object}  [params.callerProfile] The logged-in user's profile (for scope)
  * @returns {Promise<Array<{ id, full_name, assigned_grade, assigned_gender }>>}
  */
-export async function fetchServantsForStudentAssignment({ grade, gender, callerProfile } = {}) {
-  if (!grade) return [];
-
-  const normGrade  = normalizeArabicText(grade);
-  const normGender = gender ? gender.trim() : null;
-  const role       = callerProfile?.role;
-
-  const selectedGrade  = grade;
-  const selectedGender = gender;
-
-  console.log('Responsible servant fetch params:', { selectedGrade, selectedGender });
-  console.log('Current profile:', callerProfile);
-
-  // Fetch ALL servants from profiles (broad query — filtering done client-side
-  // so Arabic normalization can be applied safely).
-  // RLS SELECT policy must be: using(true) for 'authenticated' role.
-  // If you see only 1 result here, the Supabase RLS SELECT policy is too restrictive.
-  // Run: supabase/migrations/fix_profiles_select_rls.sql to fix it.
-  const { data: rawServants, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, role, assigned_grade, assigned_gender, status, email')
-    .eq('role', 'SERVANT')
-    .order('full_name', { ascending: true });
-
+export async function fetchServantsForStudentAssignment({ grade, gender } = {}) {
+  if (!grade || !gender) return [];
+  // Server-side scope (assignable_servants): admin → all matching servants; servant → peers in the same
+  // grade/gender; service leader → only the servants linked to them. Names only, no contact details.
+  const { data, error } = await supabase.rpc('assignable_servants', { p_grade: grade, p_gender: gender });
   if (error) {
-    console.error('[fetchServantsForStudentAssignment] Supabase query error:', error);
+    console.error('[fetchServantsForStudentAssignment] rpc error:', error);
     return [];
   }
-
-  console.log('Raw profiles from servant query:', rawServants);
-
-  // ⚠️  RLS Warning: If rawServants has only 1 row (the current user), it means
-  //     the Supabase SELECT policy on profiles is too restrictive.
-  //     Fix: run supabase/migrations/fix_profiles_select_rls.sql in Supabase SQL Editor.
-  if (rawServants && rawServants.length <= 1) {
-    console.warn(
-      '[fetchServantsForStudentAssignment] ⚠️  Only', rawServants.length,
-      'servant profile(s) returned from Supabase.',
-      'If there should be more, your profiles table SELECT RLS policy may be too restrictive.',
-      'Run: supabase/migrations/fix_profiles_select_rls.sql'
-    );
-  }
-
-  let filteredServants = (rawServants || []).filter(s => {
-    // 1. Grade match (normalized Arabic comparison)
-    const servantGrade = normalizeArabicText(s.assigned_grade);
-    if (servantGrade !== normGrade) return false;
-
-    // 2. Gender: if servant has assigned_gender set, it must match; if null/empty → include
-    if (s.assigned_gender && s.assigned_gender.trim()) {
-      if (s.assigned_gender.trim() !== normGender) return false;
-    }
-
-    // 3. Status: null/undefined → active; 'نشط'/'active' → active; else → exclude
-    if (!isActiveServant(s.status)) return false;
-
-    return true;
-  });
-
-  // Role-based scope: SERVICE_HEAD can only see servants in their assigned grades
-  if (role === 'SERVICE_HEAD') {
-    const headGrades = Array.isArray(callerProfile.assigned_grades)
-      ? callerProfile.assigned_grades.map(normalizeArabicText)
-      : callerProfile.assigned_grade
-        ? [normalizeArabicText(callerProfile.assigned_grade)]
-        : [];
-    filteredServants = filteredServants.filter(s =>
-      headGrades.includes(normalizeArabicText(s.assigned_grade))
-    );
-  }
-
-  // NOTE: SERVANT role is NOT filtered here — a SERVANT should see ALL servants
-  // who serve the same grade/gender, NOT only themselves.
-
-  console.log('Filtered responsible servants count:', filteredServants.length);
-  console.log('Filtered responsible servants:', filteredServants.map(s => ({
-    id: s.id,
-    full_name: s.full_name,
-    assigned_grade: s.assigned_grade,
-    assigned_gender: s.assigned_gender,
-    status: s.status,
-  })));
-
-  return filteredServants;
+  return data || [];
 }
 
 /** Delete a servant profile */
 export async function deleteServantProfile(servantId) {
-  const { error } = await supabase
-    .from('profiles')
-    .delete()
-    .eq('id', servantId);
-
-  if (error) throw error;
+  // Deleting accounts is a privileged operation done server-side (admin only).
+  const { deleteUser } = await import('./userManagement');
+  await deleteUser(servantId);
   return true;
 }

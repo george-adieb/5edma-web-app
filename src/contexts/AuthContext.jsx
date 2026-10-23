@@ -67,6 +67,19 @@ export function AuthProvider({ children }) {
         if (!valid) {
           console.warn('[AuthContext] Background recovery explicitly blocked; logging out securely.');
           await authService.signOut();
+          return;
+        }
+        // Pick up role / grade / gender changes made by an admin while the tab was open.
+        // (The database already enforces the new scope; this refreshes what the UI shows.)
+        const uid = currentUserRef.current?.id;
+        if (uid) {
+          const fresh = await authService.fetchUserProfile(uid, 'visibility_refresh');
+          if (fresh && !fresh.isFallback) {
+            const old = currentProfileRef.current;
+            const changed = !old || ['role', 'assigned_grade', 'assigned_grades', 'assigned_gender', 'status']
+              .some(k => JSON.stringify(old[k]) !== JSON.stringify(fresh[k]));
+            if (changed) setProfile(fresh);
+          }
         }
       }
     };

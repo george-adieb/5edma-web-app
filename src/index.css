@@ -33,7 +33,11 @@ body {
   color: var(--text-primary);
   font-family: 'Cairo', sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(139, 26, 26, 0.12);
 }
 
 /* Custom Scrollbar */
@@ -80,6 +84,7 @@ body {
 .app-layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   flex-direction: row-reverse;
 }
 
@@ -89,6 +94,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   min-width: 0;
 }
 
@@ -105,7 +111,10 @@ body {
   top: 0;
   right: 0;
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   z-index: 50;
   display: flex;
   flex-direction: column;
@@ -148,8 +157,16 @@ body {
 
 @media (max-width: 768px) {
   .page-content {
-    padding: 14px 12px 80px;
+    padding: 14px 12px calc(80px + env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
   }
+  /* the map page uses the whole screen height itself */
+  .page-content.page-content--map {
+    padding: 8px max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    overflow: hidden;
+  }
+  .page-content.page-content--map .ai-page { height: calc(100vh - 56px - 16px); height: calc(100dvh - 56px - 16px - env(safe-area-inset-bottom)); }
 }
 
 /* ─── Responsive grid utilities ───────────────────────────────────── */
@@ -375,4 +392,75 @@ body {
     width: 100% !important;
     justify-content: center;
   }
+}
+
+
+/* ═══ Mobile usability (phones & small tablets) — desktop is untouched ═══ */
+@media (max-width: 768px) {
+  /* iOS Safari zooms the whole page when a focused field is < 16px */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* comfortable tap targets (inline heights smaller than this are raised, never lowered) */
+  button,
+  [role="button"],
+  select {
+    min-height: 40px;
+  }
+  /* buttons/selects that set a smaller inline minHeight/height (28–38px) are raised to 40px */
+  button[style*="min-height: 28px"], button[style*="min-height: 30px"], button[style*="min-height: 32px"],
+  button[style*="min-height: 34px"], button[style*="min-height: 36px"], button[style*="min-height: 38px"],
+  select[style*="min-height: 30px"], select[style*="min-height: 32px"], select[style*="min-height: 34px"],
+  select[style*="min-height: 36px"], select[style*="min-height: 38px"] {
+    min-height: 40px !important;
+  }
+  button { min-width: 40px; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  textarea {
+    min-height: 40px;
+  }
+
+  /* no text below ~11.5px on phones (inline sizes of 8–10.5px are raised; map marker labels excluded) */
+  .page-content [style*="font-size: 8px"]:not(.leaflet-marker-icon *),
+  .page-content [style*="font-size: 9px"]:not(.leaflet-marker-icon *),
+  .page-content [style*="font-size: 9.5px"]:not(.leaflet-marker-icon *),
+  .page-content [style*="font-size: 10px"]:not(.leaflet-marker-icon *),
+  .page-content [style*="font-size: 10.5px"]:not(.leaflet-marker-icon *),
+  .sidebar [style*="font-size: 10.5px"] {
+    font-size: 11.5px !important;
+  }
+
+  /* drawer: leave room for the notch / home indicator */
+  .sidebar {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    max-width: 86vw;
+  }
+
+  .ai-composer .ai-textarea { min-height: 40px; }
+
+  /* call / WhatsApp icon links: finger-sized */
+  a[href^="tel:"], a[href*="wa.me"], a[href*="whatsapp"] {
+    min-width: 40px; min-height: 40px; justify-content: center;
+  }
+
+  /* long Arabic words / emails never push the layout wider than the screen */
+  .page-content { overflow-wrap: anywhere; }
+  img, svg, video, canvas { max-width: 100%; }
+}
+
+/* body scroll lock while the drawer is open */
+body.drawer-open { overflow: hidden; }
+
+/* Leaflet controls: finger-sized */
+@media (pointer: coarse), (max-width: 768px) {
+  html .leaflet-touch .leaflet-bar a {
+    width: 40px; height: 40px; line-height: 40px; font-size: 20px;
+  }
+  html .leaflet-touch .leaflet-control-zoom-in, html .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; }
+  .leaflet-container { -webkit-tap-highlight-color: transparent; }
+  .leaflet-control-attribution { font-size: 11px; }
 }

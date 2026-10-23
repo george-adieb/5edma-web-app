@@ -111,7 +111,14 @@ interface SafeStudent {
   grade: string | null;
   status: string | null;
   birth_date: string | null;
+  follow_up_baseline_date?: string | null;
 }
+
+// ─── Follow-up eligibility (mirror of src/lib/followUpEligibility.js) ─────────
+// 'منقطع بسبب' = absence reason known → never an automatic follow-up candidate.
+// Attendance on/before follow_up_baseline_date (set when leaving that status) is ignored.
+const EXEMPT_STATUS = 'منقطع بسبب';
+const isFollowUpExempt = (s: { status?: string | null }) => (s.status ?? '').trim() === EXEMPT_STATUS;
 
 // ─── Profile & scope ──────────────────────────────────────────────────────────
 interface Profile {
@@ -123,22 +130,26 @@ interface Profile {
   full_name?: string;
 }
 
+// Service-role queries bypass RLS, so scope MUST be applied here. Deny by default:
+// a missing/empty grade list, a missing gender or an unknown role matches NOTHING.
+const NO_MATCH_ID = '00000000-0000-0000-0000-000000000000';
+
+function scopeGrades(profile: Profile): string[] {
+  if (Array.isArray(profile.assigned_grades) && profile.assigned_grades.length) return profile.assigned_grades;
+  return profile.assigned_grade ? [profile.assigned_grade] : [];
+}
+
 // deno-lint-ignore no-explicit-any
 function applyScope(query: any, profile: Profile): any {
   if (profile.role === 'ADMIN') return query;
 
-  if (profile.role === 'SERVICE_HEAD') {
-    const grades = profile.assigned_grades?.length
-      ? profile.assigned_grades
-      : profile.assigned_grade ? [profile.assigned_grade] : null;
-    if (grades?.length) query = query.in('grade', grades);
-    return query;
+  if (profile.role === 'SERVICE_HEAD' || profile.role === 'SERVANT') {
+    const grades = scopeGrades(profile);
+    if (!grades.length || !profile.assigned_gender) return query.eq('id', NO_MATCH_ID);
+    return query.in('grade', grades).eq('gender', profile.assigned_gender);
   }
 
-  // SERVANT
-  if (profile.assigned_grade)  query = query.eq('grade',  profile.assigned_grade);
-  if (profile.assigned_gender) query = query.eq('gender', profile.assigned_gender);
-  return query;
+  return query.eq('id', NO_MATCH_ID);
 }
 
 function scopeLabel(p: Profile): string {
@@ -153,7 +164,7 @@ function scopeLabel(p: Profile): string {
 // ─── Load scoped students (safe fields only) ──────────────────────────────────
 async function loadScopedStudents(profile: Profile): Promise<SafeStudent[]> {
   const { data, error } = await applyScope(
-    supabaseAdmin.from('students').select('id, code, name, grade, status, birth_date'),
+    supabaseAdmin.from('students').select('id, code, name, grade, status, birth_date, follow_up_baseline_date'),
     profile,
   );
   if (error) {
@@ -1096,7 +1107,7 @@ async function handleNeedsFollowup(profile: Profile): Promise<any> {
       };
     }
 
-    const students = data || [];
+    const students = (data || []).filter((s: any) => !isFollowUpExempt(s));
     const normalizedTargets = [
       'منقطع',
       'محتاج افتقاد',
@@ -1135,8 +1146,11 @@ async function handleNeedsFollowup(profile: Profile): Promise<any> {
 }
 
 // deno-lint-ignore no-explicit-any
-async function handleRepeatedAbsence(profile: Profile, scopedStudents: SafeStudent[]): Promise<any> {
+async function handleRepeatedAbsence(profile: Profile, allScopedStudents: SafeStudent[]): Promise<any> {
   try {
+    const scopedStudents = allScopedStudents.filter(s => !isFollowUpExempt(s));
+    const baselineOf: Record<string, string | null> = {};
+    for (const s of scopedStudents) baselineOf[s.id] = s.follow_up_baseline_date ?? null;
     const ids = scopedStudents.map(s => s.id);
     if (ids.length === 0) return { answer: 'لا يوجد مخدومين في نطاق خدمتك.', count: 0, items: [] };
 
@@ -1161,7 +1175,7 @@ async function handleRepeatedAbsence(profile: Profile, scopedStudents: SafeStude
 
     const { data: records, error: re2 } = await supabaseAdmin
       .from('attendance_records')
-      .select('student_id, status')
+      .select('student_id, status, attendance_date')
       .in('student_id', ids)
       .in('attendance_date', distinctDates);
 
@@ -1169,6 +1183,8 @@ async function handleRepeatedAbsence(profile: Profile, scopedStudents: SafeStude
 
     const absentMap: Record<string, number> = {};
     for (const r of (records || [])) {
+      const baseline = baselineOf[r.student_id];
+      if (baseline && r.attendance_date <= baseline) continue; // history from before reactivation
       if (r.status === 'غائب') absentMap[r.student_id] = (absentMap[r.student_id] || 0) + 1;
     }
 
@@ -1347,6 +1363,8 @@ async function handleStudentStatusSummary(profile: Profile): Promise<any> {
       const status = s.status ? s.status.trim() : '';
       if (!status) {
         counts['غير محدد']++;
+      } else if (status === EXEMPT_STATUS) {
+        others[status] = (others[status] || 0) + 1;
       } else if (status.includes('منتظم')) {
         counts['منتظم']++;
       } else if (status.includes('منقطع')) {

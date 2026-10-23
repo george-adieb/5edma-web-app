@@ -362,7 +362,7 @@ export default function LocationPickerModal({
         width: '100%', maxWidth: '720px',
         boxShadow: '0 24px 72px rgba(0,0,0,0.32)',
         display: 'flex', flexDirection: 'column',
-        maxHeight: '96vh', overflow: 'hidden',
+        maxHeight: '96dvh', overflow: 'hidden',
         direction: 'rtl', fontFamily: 'Cairo, sans-serif',
       }}>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreVertical, Loader2 } from 'lucide-react';
+import { MoreVertical, Loader2, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchStudents, deleteStudent, fetchPointsForStudents } from '../lib/database';
 import RowActionsMenu from '../components/RowActionsMenu';
@@ -12,6 +12,7 @@ const STATUS_BADGE = {
   منتظم:          { bg: '#DCFCE7', color: '#16A34A', dot: '#16A34A' },
   جديد:           { bg: '#DBEAFE', color: '#1D4ED8', dot: '#1D4ED8' },
   'يحتاج افتقاد': { bg: '#FEE2E2', color: '#DC2626', dot: '#DC2626' },
+  'منقطع بسبب':  { bg: '#EDE9FE', color: '#7C3AED', dot: '#7C3AED' },
 };
 
 // Desktop: 7 columns (added النقاط)
@@ -106,6 +107,24 @@ export default function StudentsPage() {
             <p style={{ fontSize: '13px', color: '#9CA3AF', marginTop: '4px' }}>
               إدارة بيانات المخدومين، متابعة الحالات، وتحديث سجلات الحضور والافتقاد.
             </p>
+            {/* Phones: the sidebar "add" button lives inside the closed drawer, so the action is repeated
+                here (desktop keeps using the sidebar button). Same permissions as the sidebar button. */}
+            <button
+              type="button"
+              className="mob-show"
+              onClick={() => navigate('/students/new')}
+              style={{
+                marginTop: '12px', width: '100%', minHeight: '48px', padding: '12px 16px',
+                borderRadius: '12px', border: 'none', cursor: 'pointer',
+                background: 'linear-gradient(135deg, #8B1A1A, #B52626)', color: 'white',
+                fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: '15px',
+                alignItems: 'center', justifyContent: 'center', gap: '8px',
+                boxShadow: '0 4px 12px rgba(139,26,26,0.25)',
+              }}
+            >
+              <UserPlus size={18} />
+              إضافة مخدوم جديد
+            </button>
           </div>
 
           {/* Filter bar */}
@@ -126,6 +145,7 @@ export default function StudentsPage() {
               {pillBtn(status === 'منتظم',         () => { setStatus('منتظم');         setPage(1); }, 'منتظم')}
               {pillBtn(status === 'جديد',          () => { setStatus('جديد');          setPage(1); }, 'جديد')}
               {pillBtn(status === 'يحتاج افتقاد', () => { setStatus('يحتاج افتقاد'); setPage(1); }, 'افتقاد')}
+              {pillBtn(status === 'منقطع بسبب',  () => { setStatus('منقطع بسبب');  setPage(1); }, 'منقطع بسبب')}
             </div>
           </StudentFilterBar>
 
@@ -169,7 +189,7 @@ export default function StudentsPage() {
                     key={s.id}
                     onClick={() => navigate(`/students/${s.id}`)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '12px',
+                      display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap',
                       padding: '12px 14px', borderBottom: '1px solid #F3F4F6',
                       cursor: 'pointer', direction: 'rtl',
                     }}
@@ -183,9 +203,10 @@ export default function StudentsPage() {
                     }}>{s.avatar}</div>
 
                     {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* min-width keeps the name readable on 320px phones: badges drop to a second line instead */}
+                    <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
                       <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
-                      <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '2px' }}>{gradeLabel}</p>
+                      <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>{gradeLabel}</p>
                     </div>
 
                     {/* Points badge */}

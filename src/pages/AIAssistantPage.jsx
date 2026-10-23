@@ -9,6 +9,7 @@ const PAGE_STYLES = `
     display: flex;
     flex-direction: column;
     height: calc(100vh - 64px);
+    height: calc(100dvh - 64px);
     max-width: 900px;
     margin: 0 auto;
     direction: rtl;
@@ -674,7 +675,7 @@ export default function AIAssistantPage() {
 
   // Auto-scroll
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages, loading]);
 
   const sendMessage = useCallback(async (questionText) => {

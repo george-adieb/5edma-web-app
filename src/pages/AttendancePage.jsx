@@ -457,6 +457,7 @@ export default function AttendancePage() {
             right: isMobile ? 0 : '240px',
             background: 'white', borderTop: '1px solid #F3F4F6',
             padding: '10px 16px', display: 'flex', alignItems: 'center',
+            paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
             justifyContent: 'space-between', zIndex: 30,
             boxShadow: '0 -4px 12px rgba(0,0,0,0.06)',
             gap: '8px', flexWrap: 'wrap',

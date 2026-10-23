@@ -1,4 +1,4 @@
-import { Settings, RefreshCcw } from 'lucide-react';
+import { Settings, RefreshCcw, UserCog } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,6 +39,20 @@ export default function SettingsPage() {
         <div className="card max-w-lg p-5 bg-white rounded-xl shadow-sm border border-gray-100">
           <h2 className="text-lg font-bold text-gray-900 mb-3 border-b pb-2 border-gray-100">أدوات الإدارة (Admin)</h2>
           
+          <button
+            onClick={() => navigate('/settings/users')}
+            className="flex items-center gap-3 w-full p-4 rounded-xl text-right transition-colors mb-3"
+            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}
+          >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#FEF2F2', color: '#8B1A1A' }}>
+              <UserCog size={20} />
+            </div>
+            <div>
+              <p className="font-bold text-[15px] text-gray-900 mb-0.5">إدارة المستخدمين</p>
+              <p className="text-[12px] text-gray-500">إضافة الخدام وأمناء الخدمة وتعديل الأدوار والمراحل</p>
+            </div>
+          </button>
+
           <button
             onClick={() => navigate('/settings/yearly-promotion')}
             className="flex items-center gap-3 w-full p-4 rounded-xl text-right transition-colors"

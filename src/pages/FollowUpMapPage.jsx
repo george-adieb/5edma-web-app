@@ -20,9 +20,10 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '../hooks/useWindowWidth';
 import {
   Search, Map as MapIcon, X, Phone, ExternalLink, AlertTriangle,
-  MapPin, RefreshCw, LocateFixed, Loader2, ZoomIn, Users, User,
+  MapPin, RefreshCw, LocateFixed, Loader2, ZoomIn, Users, User, SlidersHorizontal,
 } from 'lucide-react';
 import { fetchStudentsForFollowUpMap } from '../lib/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,8 +49,9 @@ const STATUS_CONFIG = {
   جديد:           { bg: '#DBEAFE', color: '#1D4ED8' },
   منقطع:          { bg: '#FEE2E2', color: '#DC2626' },
   'يحتاج افتقاد': { bg: '#FEF3C7', color: '#D97706' },
+  'منقطع بسبب':   { bg: '#EDE9FE', color: '#7C3AED' },
 };
-const STATUS_FILTERS = ['الكل', 'منتظم', 'جديد', 'منقطع', 'يحتاج افتقاد'];
+const STATUS_FILTERS = ['الكل', 'منتظم', 'جديد', 'منقطع', 'يحتاج افتقاد', 'منقطع بسبب'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toArabicNumerals(n) {
@@ -61,12 +63,15 @@ function getStatusColor(status) {
        : status === 'جديد'          ? '#1D4ED8'
        : status === 'يحتاج افتقاد' ? '#D97706'
        : status === 'منقطع'         ? '#DC2626'
+       : status === 'منقطع بسبب'   ? '#7C3AED'
        : '#8B1A1A';
 }
 
 // ─── Unified Marker Icon for single and exact group students ─────────────────
 function createStudentCountIcon(count, selected = false) {
-  const size = count === 1 ? 34 : count < 10 ? 40 : count < 50 ? 46 : 54;
+  // finger-friendly: markers are at least 40px on touch screens (same look, a bit larger)
+  const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  const size = count === 1 ? (touch ? 40 : 34) : count < 10 ? 40 : count < 50 ? 46 : 54;
   const shadow = selected ? `0 0 0 6px rgba(139,26,26,0.25)` : `0 3px 14px rgba(139,26,26,0.45)`;
   const label = count === 1 ? 'مخدوم' : 'مخدومين';
   
@@ -84,7 +89,7 @@ function createStudentCountIcon(count, selected = false) {
       transition: transform 0.2s;
     ">
       <span style="font-size:${count<10?14:11}px;font-weight:900;">${toArabicNumerals(count)}</span>
-      <span style="font-size:8px;font-weight:600;opacity:.85;">${label}</span>
+      <span style="font-size:${touch ? 9 : 8}px;font-weight:600;opacity:.85;">${label}</span>
     </div>`,
     className: '',
     iconSize:   [size, size],
@@ -126,18 +131,23 @@ function MapController({ onReady, studentsWithLocation }) {
 // ─── MapResizeTrigger ─────────────────────────────────────────────────────────
 function MapResizeTrigger({ trigger }) {
   const map = useMap();
-  useEffect(() => { setTimeout(() => map.invalidateSize(), 310); }, [trigger, map]);
+  useEffect(() => {
+    // guarded: the page can unmount (route change / error) before the timer fires
+    const id = setTimeout(() => { try { if (map._loaded && map.getContainer()?.isConnected) map.invalidateSize(); } catch { /* map already removed */ } }, 310);
+    return () => clearTimeout(id);
+  }, [trigger, map]);
   return null;
 }
 
 // ─── Overlay nav buttons ──────────────────────────────────────────────────────
-function MapOverlayButtons({ onGoDefault, onUseMyLocation, geoLoading }) {
+function MapOverlayButtons({ onGoDefault, onUseMyLocation, geoLoading, isMobile = false, lifted = false }) {
   const base = {
     display: 'flex', alignItems: 'center', gap: '5px',
-    padding: '7px 11px', borderRadius: '8px',
+    padding: isMobile ? '10px 14px' : '7px 11px', borderRadius: '8px',
+    minHeight: isMobile ? '44px' : undefined,
     border: '1.5px solid rgba(255,255,255,0.65)',
     background: 'rgba(255,255,255,0.93)',
-    fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
+    fontFamily: 'Cairo, sans-serif', fontSize: isMobile ? '13px' : '11px', fontWeight: 700,
     color: '#374151', cursor: 'pointer', direction: 'rtl',
     boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
     backdropFilter: 'blur(4px)',
@@ -146,22 +156,28 @@ function MapOverlayButtons({ onGoDefault, onUseMyLocation, geoLoading }) {
   };
   return (
     <div style={{
-      position: 'absolute', bottom: '24px', right: '14px',
+      position: 'absolute', right: '10px',
+      bottom: lifted ? 'calc(42dvh + 12px)' : (isMobile ? '16px' : '24px'),
+      transition: 'bottom 0.2s ease',
       zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '6px',
       alignItems: 'flex-end',
     }}>
       <button
         style={base}
+        aria-label="الرجوع إلى سيدي بشر"
+        title="الرجوع إلى سيدي بشر"
         onClick={onGoDefault}
         onMouseEnter={e => e.currentTarget.style.background = 'white'}
         onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.93)'}
       >
-        <MapPin size={12} color="#8B1A1A" />
-        الرجوع إلى سيدي بشر
+        <MapPin size={isMobile ? 16 : 12} color="#8B1A1A" />
+        {!lifted && 'الرجوع إلى سيدي بشر'}
       </button>
       {navigator.geolocation && (
         <button
           style={{ ...base, opacity: geoLoading ? 0.7 : 1, cursor: geoLoading ? 'wait' : 'pointer' }}
+          aria-label="استخدام موقعي الحالي"
+          title="استخدام موقعي الحالي"
           onClick={onUseMyLocation}
           disabled={geoLoading}
           onMouseEnter={e => !geoLoading && (e.currentTarget.style.background = 'white')}
@@ -169,8 +185,8 @@ function MapOverlayButtons({ onGoDefault, onUseMyLocation, geoLoading }) {
         >
           {geoLoading
             ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
-            : <LocateFixed size={12} color="#1D4ED8" />}
-          {geoLoading ? 'جاري التحديد...' : 'استخدام موقعي الحالي'}
+            : <LocateFixed size={isMobile ? 16 : 12} color="#1D4ED8" />}
+          {!lifted && (geoLoading ? 'جاري التحديد...' : 'استخدام موقعي الحالي')}
         </button>
       )}
     </div>
@@ -402,7 +418,7 @@ function SidePanel({
         zIndex: 2000, background: 'white',
         borderRadius: '20px 20px 0 0',
         boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
-        maxHeight: '60vh', display: 'flex', flexDirection: 'column',
+        maxHeight: '42vh', display: 'flex', flexDirection: 'column',
         direction: 'rtl',
         transform: 'translateY(0)',
         animation: 'slideUpSheet 0.25s ease',
@@ -420,9 +436,9 @@ function SidePanel({
         }}>
           <button onClick={onClose} style={{
             background: '#F3F4F6', border: 'none', borderRadius: '7px',
-            width: '28px', height: '28px', cursor: 'pointer',
+            width: '44px', height: '44px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280',
-          }}><X size={14} /></button>
+          }} aria-label="إغلاق"><X size={18} /></button>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontWeight: 900, fontSize: '14px', color: '#111827', margin: 0 }}>{title}</p>
             <p style={{ fontSize: '11px', color: '#9CA3AF', margin: 0 }}>
@@ -432,7 +448,7 @@ function SidePanel({
         </div>
 
         {/* Mobile scrollable list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', padding: '10px 14px calc(20px + env(safe-area-inset-bottom))' }}>
           {students.map(s => (
             <StudentPanelCard
               key={s.id}
@@ -446,15 +462,6 @@ function SidePanel({
         </div>
       </div>
 
-      {/* Mobile overlay */}
-      <div
-        className="followup-panel-mobile"
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0, zIndex: 1999,
-          background: 'rgba(0,0,0,0.3)',
-        }}
-      />
     </>
   );
 }
@@ -488,6 +495,12 @@ const CSS = `
 }
 @media (max-width: 768px) {
   .followup-panel-desktop { display: none !important; }
+  /* readable text + comfortable taps inside the bottom sheet */
+  .followup-panel-mobile { max-height: 42vh; max-height: 42dvh; }
+  .followup-panel-mobile p  { font-size: 13px !important; }
+  .followup-panel-mobile a  { font-size: 13px !important; min-height: 36px; align-items: center; }
+  .followup-panel-mobile a span { font-size: 12px !important; }
+  .followup-panel-mobile button { min-height: 44px; font-size: 13px !important; }
 }
 `;
 let cssInjected = false;
@@ -505,6 +518,8 @@ export default function FollowUpMapPage() {
 
   const { profile } = useAuth();
   const navigate    = useNavigate();
+  const isMobile    = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);   // phones: filters live in a sheet
 
   const [students,           setStudents]           = useState([]);
   const [loading,            setLoading]            = useState(true);
@@ -741,21 +756,82 @@ export default function FollowUpMapPage() {
   );
 
   // ── Main render ───────────────────────────────────────────────────────────
+  const activeFilterCount = (statusFilter !== 'الكل' ? 1 : 0) + (gradeFilter !== 'الكل' ? 1 : 0);
+
   return (
-    <div style={{ direction: 'rtl', fontFamily: 'Cairo, sans-serif' }}>
+    <div style={{
+      direction: 'rtl', fontFamily: 'Cairo, sans-serif',
+      // Phones: the page fills the screen below the top bar, so the map never needs the page to scroll
+      // (a scrollable page + a touch-action:none map = a scroll trap).
+      ...(isMobile ? {
+        display: 'flex', flexDirection: 'column',
+        height: 'calc(100vh - 56px - 16px)',
+        minHeight: '420px',
+      } : {}),
+      ...(isMobile ? { height: 'calc(100dvh - 56px - 16px - env(safe-area-inset-bottom))' } : {}),
+    }}>
 
       {/* Page header */}
-      <div style={{ marginBottom: '14px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 900, color: '#111827', margin: 0 }}>
+      <div style={{ marginBottom: isMobile ? '8px' : '14px', flexShrink: 0 }}>
+        <h1 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: 900, color: '#111827', margin: 0 }}>
           🗺️ خريطة الافتقاد
         </h1>
-        <p style={{ fontSize: '13px', color: '#6B7280', margin: '4px 0 0', fontWeight: 500 }}>
-          اعرض المخدومين حسب أماكن السكن لتسهيل الافتقاد
-        </p>
+        {!isMobile && (
+          <p style={{ fontSize: '13px', color: '#6B7280', margin: '4px 0 0', fontWeight: 500 }}>
+            اعرض المخدومين حسب أماكن السكن لتسهيل الافتقاد
+          </p>
+        )}
       </div>
 
-      {/* Controls bar */}
-      <div style={{
+      {/* Phones: compact toolbar (search + filters button + refresh) */}
+      {isMobile && (
+        <div style={{ flexShrink: 0, marginBottom: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF', pointerEvents: 'none' }} />
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="ابحث باسم المخدوم أو الكود..."
+                style={{
+                  width: '100%', padding: '10px 36px 10px 12px', minHeight: '44px',
+                  border: '1.5px solid #E5E7EB', borderRadius: '10px', background: 'white',
+                  fontFamily: 'Cairo, sans-serif', color: '#374151', direction: 'rtl', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <button onClick={() => setFiltersOpen(true)} aria-label="الفلاتر" style={{
+              position: 'relative', width: '44px', height: '44px', borderRadius: '10px', flexShrink: 0,
+              border: `1.5px solid ${activeFilterCount ? '#8B1A1A' : '#E5E7EB'}`, background: activeFilterCount ? '#FEF2F2' : 'white',
+              color: '#8B1A1A', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}>
+              <SlidersHorizontal size={18} />
+              {activeFilterCount > 0 && (
+                <span style={{ position: 'absolute', top: '-6px', left: '-6px', minWidth: '18px', height: '18px', borderRadius: '9px', background: '#8B1A1A', color: 'white', fontSize: '11px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{toArabicNumerals(activeFilterCount)}</span>
+              )}
+            </button>
+            <button onClick={load} aria-label="تحديث" style={{
+              width: '44px', height: '44px', borderRadius: '10px', flexShrink: 0, border: '1.5px solid #E5E7EB', background: 'white',
+              color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}><RefreshCw size={16} /></button>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center', fontSize: '12px', fontWeight: 600, color: '#374151' }}>
+            <span>🟢 {toArabicNumerals(studentsWithLocation.length)} على الخريطة</span>
+            {studentsWithoutLocation.length > 0 && <span style={{ color: '#D97706' }}>⚠️ {toArabicNumerals(studentsWithoutLocation.length)} بدون موقع</span>}
+            <span style={{ marginRight: 'auto', color: '#6B7280' }}>الإجمالي: {toArabicNumerals(filteredStudents.length)}</span>
+          </div>
+          {geoMsg && (
+            <div style={{ marginTop: '6px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              background: geoMsg.type === 'ok' ? '#F0FDF4' : '#FEF9C3', color: geoMsg.type === 'ok' ? '#166534' : '#92400E',
+              display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ flex: 1 }}>{geoMsg.type === 'ok' ? '📍' : '⚠️'} {geoMsg.text}</span>
+              <button onClick={() => setGeoMsg(null)} aria-label="إغلاق" style={{ background: 'none', border: 'none', fontSize: '20px', lineHeight: 1, color: '#9CA3AF', cursor: 'pointer' }}>×</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Controls bar (desktop / tablet) */}
+      {!isMobile && <div style={{
         background: 'white', borderRadius: '12px', padding: '13px 16px',
         border: '1px solid #F3F4F6', boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
         marginBottom: '12px',
@@ -872,12 +948,14 @@ export default function FollowUpMapPage() {
             }}>×</button>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Map + side panel layout */}
       <div style={{
         display: 'flex', gap: '12px',
-        height: 'calc(100vh - 285px)', minHeight: '400px',
+        ...(isMobile
+          ? { flex: 1, minHeight: 0 }
+          : { height: 'calc(100vh - 285px)', minHeight: '400px' }),
       }}>
 
         {/* ── Map container ── */}
@@ -979,7 +1057,9 @@ export default function FollowUpMapPage() {
                   try {
                     const bounds = cluster.getBounds();
                     mapRef.current.fitBounds(bounds, {
-                      padding: [40, 40],
+                      paddingTopLeft: [40, 40],
+                      // phones: leave the area under the bottom sheet (42% of the screen) free
+                      paddingBottomRight: [40, window.innerWidth <= 768 ? Math.round(window.innerHeight * 0.42) + 20 : 40],
                       maxZoom: 17,
                       animate: true,
                     });
@@ -1030,14 +1110,17 @@ export default function FollowUpMapPage() {
                           // Slight zoom/pan to group
                           if (mapRef.current) {
                             mapRef.current.setView([group.lat, group.lng], Math.max(mapRef.current.getZoom(), 17), { animate: true });
+                            if (window.innerWidth <= 768) mapRef.current.panBy([0, Math.round(window.innerHeight * 0.18)], { animate: true });
                           }
                         } else {
                           setSelectedStudentId(group.students[0].id);
+                          // phones: lift the marker above the bottom sheet
+                          if (mapRef.current && window.innerWidth <= 768) mapRef.current.panBy([0, Math.round(window.innerHeight * 0.18)], { animate: true });
                         }
                       },
                     }}
                   >
-                    <Popup maxWidth={230}>
+                    {!isMobile && <Popup maxWidth={230}>
                       <div style={{
                         direction: 'rtl', fontFamily: 'Cairo, sans-serif',
                         padding: '3px 2px', minWidth: '190px',
@@ -1110,7 +1193,7 @@ export default function FollowUpMapPage() {
                           })()
                         )}
                       </div>
-                    </Popup>
+                    </Popup>}
                   </Marker>
                 );
               })}
@@ -1122,6 +1205,8 @@ export default function FollowUpMapPage() {
             onGoDefault={goToDefault}
             onUseMyLocation={askGeolocation}
             geoLoading={geoLoading}
+            isMobile={isMobile}
+            lifted={isMobile && panelOpen}
           />
         </div>
 
@@ -1139,6 +1224,52 @@ export default function FollowUpMapPage() {
           />
         )}
       </div>
+
+      {/* ── Phones: filters bottom sheet ── */}
+      {isMobile && filtersOpen && (
+        <>
+          <div onClick={() => setFiltersOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.35)' }} />
+          <div role="dialog" aria-label="الفلاتر" style={{
+            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 2101, background: 'white',
+            borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 32px rgba(0,0,0,0.2)',
+            maxHeight: '80vh', overflowY: 'auto', overscrollBehavior: 'contain',
+            padding: '16px 16px calc(16px + env(safe-area-inset-bottom))', direction: 'rtl',
+            animation: 'slideUpSheet 0.2s ease',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <button onClick={() => setFiltersOpen(false)} aria-label="إغلاق" style={{ width: '44px', height: '44px', borderRadius: '10px', border: 'none', background: '#F3F4F6', color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={18} /></button>
+              <p style={{ fontWeight: 900, fontSize: '16px', color: '#111827', margin: 0 }}>الفلاتر</p>
+            </div>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: '#6B7280', margin: '0 0 8px' }}>الحالة</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              {STATUS_FILTERS.map(f => (
+                <button key={f} onClick={() => setStatusFilter(f)} style={{
+                  padding: '8px 16px', borderRadius: '10px', fontSize: '14px', minHeight: '44px',
+                  fontFamily: 'Cairo, sans-serif', fontWeight: 700, cursor: 'pointer',
+                  border: `1.5px solid ${statusFilter === f ? '#8B1A1A' : '#E5E7EB'}`,
+                  background: statusFilter === f ? '#8B1A1A' : 'white',
+                  color: statusFilter === f ? 'white' : '#6B7280',
+                }}>{f}</button>
+              ))}
+            </div>
+            {showGradeFilter && (
+              <>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: '#6B7280', margin: '0 0 8px' }}>المرحلة</p>
+                <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)} style={{
+                  width: '100%', padding: '10px 12px', minHeight: '48px', border: '1.5px solid #E5E7EB', borderRadius: '10px',
+                  fontFamily: 'Cairo, sans-serif', color: '#374151', direction: 'rtl', background: 'white', marginBottom: '16px',
+                }}>
+                  {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => { setStatusFilter('الكل'); setGradeFilter('الكل'); }} style={{ flex: 1, minHeight: '48px', borderRadius: '10px', border: '1.5px solid #E5E7EB', background: 'white', color: '#6B7280', fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}>مسح الفلاتر</button>
+              <button onClick={() => setFiltersOpen(false)} style={{ flex: 2, minHeight: '48px', borderRadius: '10px', border: 'none', background: '#8B1A1A', color: 'white', fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}>عرض النتائج ({toArabicNumerals(filteredStudents.length)})</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

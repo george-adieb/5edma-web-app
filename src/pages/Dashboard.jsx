@@ -534,7 +534,7 @@ export default function Dashboard() {
               <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827', margin: 0 }}>إضافة تنبيه جديد</h3>
               <button onClick={() => { setShowAddAlert(false); setAlertTargetGrades([]); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={18} /></button>
             </div>
-            <form onSubmit={handleAddAlert} style={{ padding: '20px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <form onSubmit={handleAddAlert} style={{ padding: '20px', maxHeight: '80dvh', overflowY: 'auto' }}>
 
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>عنوان التنبيه <span style={{ color: '#DC2626' }}>*</span></label>

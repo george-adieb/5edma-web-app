@@ -47,6 +47,7 @@ const STATUS_BADGE = {
   منتظم:            { bg: '#DCFCE7', color: '#16A34A' },
   جديد:             { bg: '#DBEAFE', color: '#1D4ED8' },
   'يحتاج افتقاد':  { bg: '#FEE2E2', color: '#DC2626' },
+  'منقطع بسبب':     { bg: '#EDE9FE', color: '#7C3AED' },
 };
 
 export default function StudentProfilePage() {
@@ -295,10 +296,10 @@ export default function StudentProfilePage() {
     <>
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px 8px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <button
           onClick={() => navigate('/students')}
-          style={{ fontSize: '13px', color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif' }}
+          style={{ whiteSpace: 'nowrap', fontSize: '13px', color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Cairo, sans-serif' }}
         >
           المخدومين
         </button>
@@ -312,9 +313,9 @@ export default function StudentProfilePage() {
         marginBottom: '16px', border: '1px solid #F3F4F6',
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           {/* Info (right) */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', flex: '1 1 260px', minWidth: 0, flexWrap: 'wrap' }}>
             {/* Avatar */}
             <div style={{
               width: '72px', height: '72px', borderRadius: '14px', flexShrink: 0,
@@ -324,13 +325,13 @@ export default function StudentProfilePage() {
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             }}>{student.avatar}</div>
 
-            <div>
+            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
               <span style={{
                 display: 'inline-block', padding: '4px 12px', borderRadius: '6px',
                 background: `${badge.color}15`, color: badge.color,
                 fontSize: '12px', fontWeight: 800, marginBottom: '8px',
               }}>{student.status}</span>
-              <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#111827', marginBottom: '12px', lineHeight: 1.2 }}>
+              <h1 style={{ fontSize: 'clamp(20px, 6vw, 26px)', fontWeight: 900, color: '#111827', marginBottom: '12px', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
                 {student.name}
               </h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
@@ -512,7 +513,23 @@ export default function StudentProfilePage() {
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            {student.status === 'منقطع بسبب' && (
+            <div style={{
+              background: '#F5F3FF', borderRadius: '12px', padding: '16px 18px',
+              border: '1px solid #DDD6FE', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '16px' }}>🔒</span>
+                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#5B21B6' }}>معلومة خاصة</h3>
+              </div>
+              <p style={{ fontSize: '13px', color: '#374151', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <strong>سبب الانقطاع:</strong> {student.interruption_reason || '—'}
+              </p>
+              <p style={{ fontSize: '11px', color: '#7C3AED', margin: '6px 0 0' }}>لا يظهر هذا المخدوم في قوائم الافتقاد التلقائية.</p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <span style={{ fontSize: '16px' }}>📝</span>
               <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>ملاحظات</h3>
             </div>
@@ -924,7 +941,7 @@ export default function StudentProfilePage() {
                 href="/my-points"
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: '#8B1A1A', fontWeight: 700, textDecoration: 'none' }}
+                style={{ color: '#8B1A1A', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', minHeight: '40px', padding: '0 6px' }}
               >
                 اعرف نقاطك
               </a>
