@@ -415,7 +415,7 @@ function SidePanel({
       {/* ── Mobile bottom sheet ── */}
       <div className="followup-panel-mobile" style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        zIndex: 2000, background: 'white',
+        zIndex: 'var(--z-sheet)', background: 'white',
         borderRadius: '20px 20px 0 0',
         boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
         maxHeight: '42vh', display: 'flex', flexDirection: 'column',
@@ -958,11 +958,10 @@ export default function FollowUpMapPage() {
           : { height: 'calc(100vh - 285px)', minHeight: '400px' }),
       }}>
 
-        {/* ── Map container ── */}
-        <div style={{
+        {/* ── Map container (.map-stack = isolated stacking context: Leaflet z-indexes stay inside) ── */}
+        <div className="map-stack" style={{
           flex: 1, borderRadius: '14px', overflow: 'hidden',
           border: '1px solid #E5E7EB', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          position: 'relative',
         }}>
 
           {/* Empty state overlay */}
@@ -1228,9 +1227,9 @@ export default function FollowUpMapPage() {
       {/* ── Phones: filters bottom sheet ── */}
       {isMobile && filtersOpen && (
         <>
-          <div onClick={() => setFiltersOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.35)' }} />
+          <div onClick={() => setFiltersOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-sheet-backdrop)', background: 'rgba(0,0,0,0.35)' }} />
           <div role="dialog" aria-label="الفلاتر" style={{
-            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 2101, background: 'white',
+            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-sheet-top)', background: 'white',
             borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 32px rgba(0,0,0,0.2)',
             maxHeight: '80vh', overflowY: 'auto', overscrollBehavior: 'contain',
             padding: '16px 16px calc(16px + env(safe-area-inset-bottom))', direction: 'rtl',

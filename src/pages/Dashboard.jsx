@@ -353,53 +353,47 @@ export default function Dashboard() {
 
           {/* Real absent students */}
           {!loading && absentList.map(student => (
-            <div key={student.id} style={{
-              padding: '10px 0', borderBottom: '1px solid #F9FAFB',
-              direction: 'rtl',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-                    background: student.avatar_color || student.avatarColor || '#8B1A1A',
-                    color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '10px', fontWeight: 700,
-                  }}>{student.avatar}</div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
-                    <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <a href={`tel:${student.parent_phone || student.parentPhone}`} style={{
-                    width: '30px', height: '30px', borderRadius: '7px',
-                    border: '1.5px solid #E5E7EB', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    color: '#6B7280', textDecoration: 'none', background: 'white',
-                  }}>
-                    <Phone size={13} />
-                  </a>
-                  <button
-                    onClick={() => navigate(`/students/${student.id}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      padding: '5px 10px', borderRadius: '7px',
-                      background: '#8B1A1A', color: 'white',
-                      border: 'none', cursor: 'pointer',
-                      fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
-                    }}
-                  >
-                    <Save size={11} />إضافة ملاحظة
-                  </button>
-                </div>
+            <div key={student.id} className="pf-row">
+              <div className="pf-avatar" style={{
+                width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                background: student.avatar_color || student.avatarColor || '#8B1A1A',
+                color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '10px', fontWeight: 700,
+              }}>{student.avatar}</div>
+              <div className="pf-info">
+                <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>{student.name}</p>
+                <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{student.grade}</p>
               </div>
-              <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
+              <div className="pf-status">
                 <span style={{
                   fontSize: '11px', padding: '3px 8px', borderRadius: '20px',
                   background: '#FEE2E2', color: '#DC2626', fontWeight: 600,
                 }}>غائب هذا الأسبوع</span>
                 <span style={{ fontSize: '11px', color: '#6B7280' }}>لم يتم التواصل</span>
+              </div>
+              <div className="pf-actions">
+                <a href={`tel:${student.parent_phone || student.parentPhone}`} className="pf-call-btn" aria-label="اتصال" style={{
+                  width: '30px', height: '30px', borderRadius: '7px',
+                  border: '1.5px solid #E5E7EB', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  color: '#6B7280', textDecoration: 'none', background: 'white',
+                }}>
+                  <Phone size={13} />
+                </a>
+                <button
+                  className="pf-note-btn"
+                  onClick={() => navigate(`/students/${student.id}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    padding: '5px 10px', borderRadius: '7px',
+                    background: '#8B1A1A', color: 'white',
+                    border: 'none', cursor: 'pointer',
+                    fontFamily: 'Cairo, sans-serif', fontSize: '11px', fontWeight: 700,
+                  }}
+                >
+                  <Save size={11} />إضافة ملاحظة
+                </button>
               </div>
             </div>
           ))}

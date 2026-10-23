@@ -185,55 +185,46 @@ export default function StudentsPage() {
               // ── Mobile card ──
               if (isMobile) {
                 return (
-                  <div
-                    key={s.id}
-                    onClick={() => navigate(`/students/${s.id}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap',
-                      padding: '12px 14px', borderBottom: '1px solid #F3F4F6',
-                      cursor: 'pointer', direction: 'rtl',
-                    }}
-                  >
+                  <div key={s.id} className="stu-card" onClick={() => navigate(`/students/${s.id}`)}>
                     {/* Avatar */}
-                    <div style={{
+                    <div className="stu-card-avatar" style={{
                       width: '42px', height: '42px', borderRadius: '50%', flexShrink: 0,
                       background: s.avatar_color || s.avatarColor || '#8B1A1A', color: 'white',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '13px', fontWeight: 700,
                     }}>{s.avatar}</div>
 
-                    {/* Info */}
-                    {/* min-width keeps the name readable on 320px phones: badges drop to a second line instead */}
-                    <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
+                    {/* Name + grade (wraps naturally; never pushes the menu) */}
+                    <div className="stu-card-info">
                       <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{s.name}</p>
                       <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>{gradeLabel}</p>
                     </div>
 
-                    {/* Points badge */}
-                    {pointsMap[s.id] > 0 && (
+                    {/* Status + points badges, under the name */}
+                    <div className="stu-card-badges">
                       <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '3px',
-                        padding: '3px 8px', borderRadius: '20px', flexShrink: 0,
-                        fontSize: '11px', fontWeight: 800,
-                        background: '#FEF3C7', color: '#92400E',
+                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                        padding: '4px 8px', borderRadius: '20px',
+                        fontSize: '11px', fontWeight: 700,
+                        background: badge.bg, color: badge.color,
                       }}>
-                        ⭐ {pointsMap[s.id]}
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: badge.dot }} />
+                        {s.status}
                       </span>
-                    )}
+                      {pointsMap[s.id] > 0 && (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '3px',
+                          padding: '3px 8px', borderRadius: '20px',
+                          fontSize: '11px', fontWeight: 800,
+                          background: '#FEF3C7', color: '#92400E',
+                        }}>
+                          ⭐ {pointsMap[s.id]}
+                        </span>
+                      )}
+                    </div>
 
-                    {/* Status badge */}
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '4px',
-                      padding: '4px 8px', borderRadius: '20px', flexShrink: 0,
-                      fontSize: '11px', fontWeight: 700,
-                      background: badge.bg, color: badge.color,
-                    }}>
-                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: badge.dot }} />
-                      {s.status}
-                    </span>
-
-                    {/* Actions */}
-                    <div onClick={e => e.stopPropagation()}>
+                    {/* Actions: fixed column, always aligned */}
+                    <div className="stu-card-menu" onClick={e => e.stopPropagation()}>
                       <RowActionsMenu
                         onEdit={() => navigate(`/students/edit/${s.id}`)}
                         onDelete={() => handleDelete(s.id)}

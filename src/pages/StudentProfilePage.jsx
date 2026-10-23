@@ -339,9 +339,9 @@ export default function StudentProfilePage() {
                   <span style={{ fontSize: '16px' }}>🎓</span> {student.grade || student.grade_id || '—'}
                 </span>
                 {student.student_phone && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <span style={{ fontSize: '16px' }}>📱</span> المخدوم: <span dir="ltr">{student.student_phone}</span>
+                      <span style={{ fontSize: '16px' }}>📱</span> المخدوم: <span dir="ltr" style={{ whiteSpace: 'nowrap' }}>{student.student_phone}</span>
                     </span>
                     <a href={`tel:${student.student_phone}`}
                       style={{ color: '#16A34A', display: 'flex', alignItems: 'center', padding: '4px', background: '#DCFCE7', borderRadius: '6px', textDecoration: 'none' }}>
@@ -360,9 +360,9 @@ export default function StudentProfilePage() {
                   </span>
                 )}
                 {student.parent_phone && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <span style={{ fontSize: '16px' }}>📱</span> ولي الأمر: <span dir="ltr">{student.parent_phone}</span>
+                      <span style={{ fontSize: '16px' }}>📱</span> ولي الأمر: <span dir="ltr" style={{ whiteSpace: 'nowrap' }}>{student.parent_phone}</span>
                     </span>
                     <a
                       href={`tel:${student.parent_phone}`}
@@ -383,9 +383,9 @@ export default function StudentProfilePage() {
                   </div>
                 )}
                 {student.parent_phone_2 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '13px', color: '#4B5563', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <span style={{ fontSize: '16px' }}>☎️</span> رقم آخر: <span dir="ltr">{student.parent_phone_2}</span>
+                      <span style={{ fontSize: '16px' }}>☎️</span> رقم آخر: <span dir="ltr" style={{ whiteSpace: 'nowrap' }}>{student.parent_phone_2}</span>
                     </span>
                     <a
                       href={`tel:${student.parent_phone_2}`}
@@ -446,13 +446,13 @@ export default function StudentProfilePage() {
       </div>
 
       {/* Main content: 2 columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
+      <div className="profile-grid">
         
         {/* RIGHT: stats + info */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="profile-col">
 
           {/* Attendance rate */}
-          <div style={{
+          <div className="profile-card pc-rate" style={{
             background: 'white', borderRadius: '12px', padding: '18px 20px',
             border: '1.5px solid #FECACA', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -488,7 +488,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Medical info */}
-          <div style={{
+          <div className="profile-card pc-medical" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -509,7 +509,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Notes (saved from the public update form / Add-Edit student) */}
-          <div style={{
+          <div className="profile-card pc-notes" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -541,7 +541,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Hobbies */}
-          <div style={{
+          <div className="profile-card pc-hobbies" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -565,7 +565,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Location section */}
-          <div style={{
+          <div className="profile-card pc-location" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -725,14 +725,14 @@ export default function StudentProfilePage() {
               </div>
             )}
           </div>
-          <div style={{
+          <div className="profile-card pc-actions" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
             <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827', marginBottom: '12px' }}>إجراءات سريعة</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {student.parent_phone && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="profile-actions-grid">
                   <a
                     href={`tel:${student.parent_phone}`}
                     style={{
@@ -762,7 +762,7 @@ export default function StudentProfilePage() {
                 </div>
               )}
               {student.parent_phone_2 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="profile-actions-grid">
                   <a
                     href={`tel:${student.parent_phone_2}`}
                     style={{
@@ -807,19 +807,19 @@ export default function StudentProfilePage() {
           </div>
 
           {/* ── Points card ── */}
-          <div style={{
+          <div className="profile-card pc-points" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1.5px solid #FDE68A', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                 <span style={{ fontSize: '16px' }}>⭐</span>
-                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>النقاط</h3>
+                <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#111827', whiteSpace: 'nowrap' }}>النقاط</h3>
               </div>
               <button
                 onClick={() => setShowAddPoints(true)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '5px',
+                  display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', flexShrink: 0,
                   padding: '6px 12px', borderRadius: '8px',
                   background: '#8B1A1A', color: 'white', border: 'none',
                   fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: '11px', cursor: 'pointer',
@@ -895,7 +895,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* ── Points Code card ── */}
-          <div style={{
+          <div className="profile-card pc-points-code" style={{
             background: 'white', borderRadius: '12px', padding: '16px 18px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -950,10 +950,10 @@ export default function StudentProfilePage() {
         </div>
 
         {/* LEFT: attendance + notes */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="profile-col">
 
           {/* Attendance history */}
-          <div style={{
+          <div className="profile-card pc-history" style={{
             background: 'white', borderRadius: '12px', padding: '18px 20px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -988,7 +988,7 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Follow-up / servant notes */}
-          <div style={{
+          <div className="profile-card pc-servant-notes" style={{
             background: 'white', borderRadius: '12px', padding: '18px 20px',
             border: '1px solid #F3F4F6', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
           }}>
@@ -1121,7 +1121,7 @@ export default function StudentProfilePage() {
 
           {/* Active follow-up task (if any) */}
           {followUp && (
-            <div style={{
+            <div className="profile-card pc-followup" style={{
               background: followUp.urgency === 'urgent' ? '#FEF2F2' : '#FFFBEB',
               borderRadius: '12px', padding: '16px 20px',
               border: `1.5px solid ${followUp.urgency === 'urgent' ? '#FECACA' : '#FDE68A'}`,

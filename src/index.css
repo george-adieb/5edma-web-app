@@ -15,6 +15,18 @@
   --text-secondary: #6B7280;
   --border: #E5E7EB;
   --sidebar-width: 240px;
+
+  /* ─── Layering scale (one place for every z-index) ───────────────
+     page content / Leaflet panes (contained by .map-stack) < sticky top bar
+     < desktop sidebar < page bottom sheets < modals < mobile drawer backdrop < mobile drawer */
+  --z-sticky: 30;
+  --z-sidebar: 50;
+  --z-sheet: 900;
+  --z-sheet-backdrop: 910;
+  --z-sheet-top: 911;
+  --z-modal: 1000;
+  --z-drawer-backdrop: 1100;
+  --z-drawer: 1110;
 }
 
 * {
@@ -115,7 +127,7 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  z-index: 50;
+  z-index: var(--z-sidebar);
   display: flex;
   flex-direction: column;
   box-shadow: -2px 0 8px rgba(0,0,0,0.04);
@@ -124,6 +136,8 @@ body {
 
 @media (max-width: 768px) {
   .sidebar {
+    /* off-canvas drawer: above every page layer, incl. Leaflet (contained) and bottom sheets */
+    z-index: var(--z-drawer);
     transform: translateX(110%);
     box-shadow: -4px 0 24px rgba(0,0,0,0.18);
   }
@@ -142,9 +156,19 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.38);
-  z-index: 40;
+  z-index: var(--z-drawer-backdrop);
   backdrop-filter: blur(1px);
   animation: fadeIn 0.2s ease;
+  touch-action: none;           /* no background pan/zoom through the backdrop on iOS */
+}
+
+/* Map stacking root: Leaflet gives its panes z-index 400 and its controls 1000, which otherwise
+   leak into the page's root stacking context and paint above fixed overlays (the drawer).
+   An isolated stacking context keeps every Leaflet layer inside the map box. */
+.map-stack {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
 }
 
 /* ─── Page content ────────────────────────────────────────────────── */
@@ -449,6 +473,8 @@ body {
 
   /* long Arabic words / emails never push the layout wider than the screen */
   .page-content { overflow-wrap: anywhere; }
+  /* …but a button / link label is never split letter-by-letter: it wraps at spaces only */
+  .page-content button, .page-content a[href] { overflow-wrap: normal; }
   img, svg, video, canvas { max-width: 100%; }
 }
 
@@ -463,4 +489,107 @@ body.drawer-open { overflow: hidden; }
   html .leaflet-touch .leaflet-control-zoom-in, html .leaflet-touch .leaflet-control-zoom-out { font-size: 22px; }
   .leaflet-container { -webkit-tap-highlight-color: transparent; }
   .leaflet-control-attribution { font-size: 11px; }
+}
+
+/* ═══ Pending follow-up row (Dashboard › بانتظار الافتقاد) ════════════════
+   avatar | name+grade | actions on one line; status line underneath the name.
+   On phones the actions get their own row so a long name never shifts them. */
+.pf-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "avatar info    actions"
+    "avatar status  actions";
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid #F9FAFB;
+  direction: rtl;
+}
+.pf-avatar  { grid-area: avatar; }
+.pf-info    { grid-area: info; min-width: 0; text-align: right; }
+.pf-info p  { overflow-wrap: anywhere; }
+.pf-status  { grid-area: status; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pf-actions { grid-area: actions; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; align-self: center; }
+.pf-actions > * { flex-shrink: 0; white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .pf-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "avatar info"
+      "avatar status"
+      "actions actions";
+    row-gap: 8px;
+  }
+  .pf-actions { width: 100%; }
+  .pf-actions .pf-note-btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
+  .pf-actions .pf-call-btn { width: 40px; height: 40px; }
+}
+
+/* ═══ Students list › mobile card ═════════════════════════════════════════
+   top row: avatar | name + grade | ⋮ menu (fixed column)
+   bottom row: status + points badges under the name. */
+.stu-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "avatar info   menu"
+    "avatar badges menu";
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #F3F4F6;
+  cursor: pointer;
+  direction: rtl;
+}
+.stu-card-avatar { grid-area: avatar; }
+.stu-card-info   { grid-area: info; min-width: 0; }
+.stu-card-info p { overflow-wrap: anywhere; }
+.stu-card-badges { grid-area: badges; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.stu-card-badges > span { white-space: nowrap; }
+.stu-card-menu   { grid-area: menu; align-self: center; display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; }
+
+/* ═══ Student profile ═══════════════════════════════════════════════════
+   desktop: info column (1fr) + attendance/notes column (2fr) — unchanged.
+   phones: one card per row, full width, in a hand-picked reading order. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+}
+.profile-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.profile-card { min-width: 0; width: 100%; }
+
+.profile-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.profile-actions-grid > a,
+.profile-actions-grid > button { min-width: 0; white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .profile-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .profile-col  { display: contents; }           /* cards become direct grid items → re-orderable */
+  .profile-card { order: 50; }
+  .pc-rate          { order: 1; }
+  .pc-history       { order: 2; }
+  .pc-servant-notes { order: 3; }
+  .pc-followup      { order: 4; }
+  .pc-actions       { order: 5; }
+  .pc-points        { order: 6; }
+  .pc-points-code   { order: 7; }
+  .pc-medical       { order: 8; }
+  .pc-private       { order: 9; }
+  .pc-notes         { order: 10; }
+  .pc-hobbies       { order: 11; }
+  .pc-location      { order: 12; }
+  .profile-actions-grid > a, .profile-actions-grid > button { font-size: 13px; min-height: 44px; }
+}
+/* very narrow phones: one action button per row so labels stay on one line */
+@media (max-width: 359px) {
+  .profile-actions-grid { grid-template-columns: minmax(0, 1fr); }
 }
