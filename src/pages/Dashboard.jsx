@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Save, AlertCircle, Plus, X, Loader2 } from 'lucide-react';
+import { followUpStatusBadge } from '../lib/followUpEligibility';
 import { fetchDashboardStats, fetchAbsentForDate, fetchActiveAlerts, saveSystemAlert, fetchUpcomingBirthdays } from '../lib/database';
 import { getActiveFriday } from '../lib/attendanceCycle';
 import { useAuth } from '../contexts/AuthContext';
@@ -370,6 +371,9 @@ export default function Dashboard() {
                   fontSize: '11px', padding: '3px 8px', borderRadius: '20px',
                   background: '#FEE2E2', color: '#DC2626', fontWeight: 600,
                 }}>غائب هذا الأسبوع</span>
+                {(() => { const b = followUpStatusBadge(student); return b && (
+                  <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '20px', background: b.bg, color: b.color, fontWeight: 700 }}>{b.label}</span>
+                ); })()}
                 <span style={{ fontSize: '11px', color: '#6B7280' }}>لم يتم التواصل</span>
               </div>
               <div className="pf-actions">

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot, MapPin, UserCog, ShieldCheck,
+  LayoutDashboard, CalendarCheck, Users, User, Heart, Settings, UserPlus, X, Bot, MapPin, UserCog, ShieldCheck, CalendarDays, ChevronDown,
 } from 'lucide-react';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { canSeeBooking, BOOKING_LINKS } from '../../lib/access';
 
 const navItems = [
   { to: '/',              icon: LayoutDashboard, label: 'لوحة التحكم'      },
@@ -52,6 +54,51 @@ function ContextualAddBtn({ onClose }) {
       <UserPlus size={15} />
       {label}
     </button>
+  );
+}
+
+function BookingSection({ onClose }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-controls="booking-submenu"
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+          padding: '10px 12px', borderRadius: '8px', justifyContent: 'flex-end',
+          fontWeight: 600, fontSize: '13.5px', fontFamily: 'inherit', color: '#6B7280',
+          background: 'transparent', border: 'none', borderRight: '3px solid transparent',
+          cursor: 'pointer', minHeight: '44px', boxSizing: 'border-box',
+        }}
+      >
+        <ChevronDown size={15} style={{ marginInlineEnd: 'auto', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }} />
+        <span>حجز الأماكن</span>
+        <CalendarDays size={17} />
+      </button>
+      {open && (
+        <div id="booking-submenu" style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '18px' }}>
+          {BOOKING_LINKS.map(({ href, label }) => (
+            <a
+              key={href}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                padding: '10px 12px', borderRadius: '8px', fontWeight: 600, fontSize: '13px',
+                textDecoration: 'none', color: '#6B7280', minHeight: '44px', boxSizing: 'border-box',
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -145,6 +192,7 @@ export default function Sidebar({ onClose }) {
             <Icon size={17} />
           </NavLink>
         ))}
+        {canSeeBooking(profile) && <BookingSection onClose={onClose} />}
       </nav>
 
       <div style={{ padding: '12px 12px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>

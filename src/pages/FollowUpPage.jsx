@@ -1,3 +1,4 @@
+import { followUpStatusBadge } from '../lib/followUpEligibility';
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Phone, Home, MessageSquare, Save, CheckCircle, Bell, Loader2, AlertCircle } from 'lucide-react';
@@ -397,7 +398,7 @@ export default function FollowUpPage() {
                         {f.avatar}
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>{f.name}</p>
+                        <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827', overflowWrap: 'anywhere' }}>{f.name}</p>
                         <p style={{ fontSize: '11px', color: '#9CA3AF' }}>{f.grade || '—'}</p>
                         <p style={{ fontSize: '11px', marginTop: '2px', color: urg.color, fontWeight: 600 }}>
                           {durationText}
@@ -413,6 +414,9 @@ export default function FollowUpPage() {
                       }}>
                         {urg.label}
                       </span>
+                      {(() => { const b = followUpStatusBadge(f); return b && (
+                        <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '20px', fontWeight: 700, background: b.bg, color: b.color }}>{b.label}</span>
+                      ); })()}
                       {lastLog && (
                         <div style={{
                           width: '32px', height: '32px', borderRadius: '8px',

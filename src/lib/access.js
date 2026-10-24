@@ -46,3 +46,13 @@ export function allowedGradeLabels(profile) {
   const scope = getStudentScope(profile);
   return scope.all ? null : scope.grades;
 }
+
+// External booking site. Hiding the menu is UI-only: the booking site must enforce its own auth.
+// Roles are literal profiles.role values (SERVICE_HEAD = أمين الخدمة; the app has no SERVICE_LEADER).
+const BOOKING_ROLES = ['ADMIN', 'SERVICE_HEAD', 'GENERAL_SECRETARIAT'];
+export const canSeeBooking = (profile) => !!profile && BOOKING_ROLES.includes(profile.role);
+
+export const BOOKING_LINKS = [
+  { href: 'https://booking-web-app-beta.vercel.app/book', label: 'حجز أماكن الكنيسة' },
+  { href: 'https://booking-web-app-beta.vercel.app/abo-talat-booking', label: 'حجز أبو تلات' },
+];

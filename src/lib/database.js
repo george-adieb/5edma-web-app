@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { GRADE_LABEL_MAP } from '../data/constants';
 import { getRecentFridays } from './attendanceCycle';
 import { applyStudentScope, isAdminRole } from './access';
-import { isFollowUpExempt, eligibleAttendance, INTERRUPTED_WITH_REASON } from './followUpEligibility';
+import { isFollowUpExempt, eligibleAttendance, sortByFollowUpPriority, INTERRUPTED_WITH_REASON } from './followUpEligibility';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -197,8 +197,8 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
 
   const studentMap = Object.fromEntries((students || []).map(s => [String(s.id), s]));
 
-  // Merge and return
-  return activeMetrics
+  // Merge and return — status priority first, then the existing urgency order (stable)
+  return sortByFollowUpPriority(activeMetrics
     .map(m => {
       const s = studentMap[String(m.studentId)];
       if (!s) return null;
@@ -214,7 +214,7 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
         } : null
       };
     })
-    .filter(Boolean);
+    .filter(Boolean));
 }
 
 /**
@@ -915,10 +915,12 @@ export async function fetchAbsentForDate(date = todayISO(), profile = null) {
   const { data: studs, error: e2 } = await studsQuery;
   if (e2) throw e2;
   // absences dated on/before the reactivation baseline are history, not new follow-ups
-  return (studs || [])
+  const eligible = (studs || [])
     .filter(s => !isFollowUpExempt(s))   // exempt students never appear as pending follow-up
     .filter(s => eligibleAttendance([{ attendance_date: date }], s).length > 0)
-    .slice(0, 10);
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar') || String(a.id).localeCompare(String(b.id)));
+  // priority sort over the full eligible set BEFORE the display limit
+  return sortByFollowUpPriority(eligible).slice(0, 10);
 }
 
 /** @deprecated Use fetchAbsentForDate(date) instead */
