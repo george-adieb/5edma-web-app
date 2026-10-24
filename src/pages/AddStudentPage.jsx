@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   User, Info, Save, Phone, Heart, MapPin, AlertCircle, Loader2,
 } from 'lucide-react';
-import { insertStudent, fetchServantsForStudentAssignment } from '../lib/database';
+import { insertStudent } from '../lib/database';
+import ResponsibleServantField from '../components/ResponsibleServantField';
 import { useAuth } from '../contexts/AuthContext';
 import { GRADES, GRADE_LABEL_MAP } from '../data/constants';
 import LocationPickerModal from '../components/LocationPickerModal';
@@ -157,10 +158,6 @@ export default function AddStudentPage() {
   const [saving,      setSaving]      = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  // Servant dropdown state
-  const [servants,        setServants]        = useState([]);
-  const [servantsLoading, setServantsLoading] = useState(false);
-
   // Map Picker State
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
@@ -183,32 +180,6 @@ export default function AddStudentPage() {
       return base;
     });
   }, [profile]);
-
-  // ── Reload servant list whenever grade or gender changes ──────────
-  useEffect(() => {
-    if (!form.grade) {
-      setServants([]);
-      return;
-    }
-    // Convert grade ID → Arabic label (what profiles.assigned_grade stores)
-    const gradeLabel = GRADE_LABEL_MAP[form.grade] || form.grade;
-
-    console.log('Selected student grade:', form.grade, '→', gradeLabel);
-    console.log('Selected student gender:', form.gender);
-
-    setServantsLoading(true);
-    fetchServantsForStudentAssignment({
-      grade: gradeLabel,
-      gender: form.gender,
-      callerProfile: profile,
-    })
-      .then(list => {
-        console.log('Filtered responsible servants:', list);
-        setServants(list);
-      })
-      .catch(err => { console.error('[AddStudentPage] servants fetch error:', err); setServants([]); })
-      .finally(() => setServantsLoading(false));
-  }, [form.grade, form.gender, profile]);
 
   function set(field, val) {
     setForm(p => ({ ...p, [field]: val }));
@@ -244,10 +215,9 @@ export default function AddStudentPage() {
     setSubmitError('');
     try {
       // Resolve servant full_name for backward-compat storage
-      const selectedServant = servants.find(s => s.id === form.servant);
       const formWithServantName = {
         ...form,
-        servantName: selectedServant?.full_name || form.servant,
+        servantName: form.servant,   // the dropdown value is the servant's full_name
       };
       const newStudent = await insertStudent(formWithServantName);
       console.log('[AddStudentPage] insert success →', newStudent);
@@ -576,49 +546,13 @@ export default function AddStudentPage() {
             </FormGroup>
             <div data-has-error={!!errors.servant}>
               <FormGroup label="الخادم المسؤول" error={errors.servant}>
-                <div style={{ position: 'relative' }}>
-                  <select
-                    value={form.servant}
-                    onChange={e => set('servant', e.target.value)}
-                    disabled={!form.grade || servantsLoading}
-                    style={{
-                      ...SEL(errors.servant),
-                      opacity: !form.grade ? 0.55 : 1,
-                      cursor: !form.grade ? 'not-allowed' : 'pointer',
-                    }}
-                    onFocus={e => e.target.style.borderColor = '#8B1A1A'}
-                    onBlur={e  => e.target.style.borderColor = errors.servant ? '#FCA5A5' : '#E5E7EB'}
-                  >
-                    {/* Placeholder option */}
-                    {servantsLoading ? (
-                      <option value="">جارٍ التحميل...</option>
-                    ) : !form.grade ? (
-                      <option value="">اختر المرحلة أولاً</option>
-                    ) : servants.length === 0 ? (
-                      <option value="">لا يوجد خدام متاحون لهذه المرحلة</option>
-                    ) : (
-                      <>
-                        <option value="">اختر الخادم المسؤول</option>
-                        {servants.map(s => (
-                          <option key={s.id} value={s.id}>{s.full_name}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  {servantsLoading && (
-                    <div style={{
-                      position: 'absolute', left: '10px', top: '50%',
-                      transform: 'translateY(-50%)', pointerEvents: 'none',
-                    }}>
-                      <Loader2 size={14} color="#8B1A1A" style={{ animation: 'spin 1s linear infinite' }} />
-                    </div>
-                  )}
-                </div>
-                {!form.grade && (
-                  <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px', textAlign: 'right' }}>
-                    حدّد المرحلة الدراسية أولاً لتظهر قائمة الخدام
-                  </p>
-                )}
+                <ResponsibleServantField
+                  grade={GRADE_LABEL_MAP[form.grade] || form.grade}
+                  gender={form.gender}
+                  value={form.servant}
+                  onChange={v => set('servant', v)}
+                  error={errors.servant}
+                />
               </FormGroup>
             </div>
             <FormGroup label="حالة المتابعة الأولية">

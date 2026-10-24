@@ -5,7 +5,8 @@ import {
   User, Info, Save, Loader2, Phone, MapPin, AlertCircle,
 } from 'lucide-react';
 import { fetchStudent, updateStudent, updateStudentLocation } from '../lib/database';
-import { GRADES, REVERSE_GRADE_MAP } from '../data/constants';
+import ResponsibleServantField from '../components/ResponsibleServantField';
+import { GRADES, REVERSE_GRADE_MAP, GRADE_LABEL_MAP } from '../data/constants';
 import LocationPickerModal from '../components/LocationPickerModal';
 
 /* ─── Shared sub-components ─────────────────────────────── */
@@ -116,13 +117,6 @@ const RELATIONS = [
   { id: 'أخرى',   label: 'أخرى'    },
 ];
 
-const SERVANTS = [
-  { id: '', label: 'اختر الخادم' },
-  { id: 'mina',   label: 'أ. مينا كمال'    },
-  { id: 'bishoy', label: 'أ. بيشوي أنطون'  },
-  { id: 'marina', label: 'أ. مارينا يوسف'  },
-  { id: 'peter',  label: 'أ. بطرس جرجس'    },
-];
 
 /* ─── Main page ─────────────────────────────────────────────── */
 const EMPTY = {
@@ -142,6 +136,7 @@ export default function EditStudentPage() {
   const [errors,         setErrors]         = useState({});
   const [saving,         setSaving]         = useState(false);
   const [submitError,    setSubmitError]    = useState('');
+  const [savedScope,     setSavedScope]     = useState(null);   // stored grade/gender/servant
 
   // Location state (saved independently from the main form)
   const [studentLocation, setStudentLocation] = useState({ lat: null, lng: null, updated_at: null });
@@ -184,6 +179,7 @@ export default function EditStudentPage() {
           medicalNotes: student.medical_notes || '',
           hobbies: hobbiesText,
         });
+        setSavedScope({ grade: student.grade || '', gender: student.gender || 'ذكر', servant: student.servant || '' });
         setStudentLocation({
           lat: student.latitude ? parseFloat(student.latitude) : null,
           lng: student.longitude ? parseFloat(student.longitude) : null,
@@ -557,13 +553,14 @@ export default function EditStudentPage() {
 
             <div data-has-error={!!errors.servant}>
               <FormGroup label="الخادم المسؤول" optional>
-                <select value={form.servant} onChange={e => set('servant', e.target.value)}
-                  style={SEL(errors.servant)}
-                  onFocus={e => e.target.style.borderColor = '#8B1A1A'}
-                  onBlur={e => e.target.style.borderColor = errors.servant ? '#FCA5A5' : '#E5E7EB'}
-                >
-                  {SERVANTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
+                <ResponsibleServantField
+                  grade={GRADE_LABEL_MAP[form.grade] || form.grade}
+                  gender={form.gender}
+                  value={form.servant}
+                  onChange={v => set('servant', v)}
+                  error={errors.servant}
+                  saved={savedScope}
+                />
               </FormGroup>
             </div>
 

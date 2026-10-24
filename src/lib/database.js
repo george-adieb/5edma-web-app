@@ -1361,13 +1361,12 @@ function isActiveServant(status) {
  */
 export async function fetchServantsForStudentAssignment({ grade, gender } = {}) {
   if (!grade || !gender) return [];
-  // Server-side scope (assignable_servants): admin → all matching servants; servant → peers in the same
-  // grade/gender; service leader → only the servants linked to them. Names only, no contact details.
-  const { data, error } = await supabase.rpc('assignable_servants', { p_grade: grade, p_gender: gender });
-  if (error) {
-    console.error('[fetchServantsForStudentAssignment] rpc error:', error);
-    return [];
-  }
+  // The form uses ذكر/أنثى; tolerate the بنين/بنات labels too.
+  const g = gender === 'بنين' ? 'ذكر' : gender === 'بنات' ? 'أنثى' : gender;
+  // Server-side scope (assignable_servants): exact grade (assigned_grade or assigned_grades) + gender,
+  // limited to what the caller may access. Names only, no contact details. Errors propagate to the UI.
+  const { data, error } = await supabase.rpc('assignable_servants', { p_grade: grade, p_gender: g });
+  if (error) throw error;
   return data || [];
 }
 
