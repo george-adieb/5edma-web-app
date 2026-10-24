@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { GRADE_LABEL_MAP } from '../data/constants';
-import { getRecentFridays } from './attendanceCycle';
+import { getRecentFridays, getPreviousFriday } from './attendanceCycle';
+import { sessionDatesFrom, consecutiveAbsences } from './absenceStreak';
 import { applyStudentScope, isAdminRole } from './access';
 import { isFollowUpExempt, eligibleAttendance, sortByFollowUpPriority, INTERRUPTED_WITH_REASON } from './followUpEligibility';
 
@@ -54,15 +55,36 @@ export async function fetchStudentsNeedingFollowUp() {
 }
 
 /**
+ * Attendance rows (all statuses) for the given Fridays, limited to the caller's students.
+ * One query (plus one scope query for non-admins) — never per student. RLS applies on top.
+ */
+async function fetchScopedAttendance(recentFridays, profile) {
+  let scopedStudentIds = null;
+  if (!isAdminRole(profile)) {
+    const { data: scopedStudents, error: scopeErr } = await applyStudentScope(
+      supabase.from('students').select('id'), profile);
+    if (scopeErr) throw scopeErr;
+    scopedStudentIds = (scopedStudents || []).map(s => s.id);
+    if (scopedStudentIds.length === 0) return [];
+  }
+  let recordsQuery = supabase
+    .from('attendance_records')
+    .select('student_id, attendance_date, status')
+    .in('attendance_date', recentFridays);
+  if (scopedStudentIds) recordsQuery = recordsQuery.in('student_id', scopedStudentIds);
+  const { data, error } = await recordsQuery;
+  if (error) throw error;
+  return data || [];
+}
+
+/**
  * Fetch follow-up candidates driven entirely by real attendance data.
  *
  * Algorithm:
  *   1. Query attendance_records for the given Friday dates.
  *   2. For every student who has at least one "غائب" record, compute:
  *        - totalAbsences   — total غائب records in the window
- *        - consecutive     — longest streak of غائب Fridays ending at the
- *                            most-recent Friday they appear in (streak breaks
- *                            on the first non-غائب record when scanning newest→oldest)
+ *        - consecutive     — confirmed current streak (see lib/absenceStreak.js)
  *   3. Exclude students with zero absences.
  *   4. Sort: consecutive desc → totalAbsences desc (most urgent first).
  *   5. Fetch full student details and return merged objects.
@@ -81,28 +103,7 @@ export async function fetchStudentsNeedingFollowUp() {
 export async function fetchFollowUpCandidates(recentFridays, profile = null) {
   if (!recentFridays || recentFridays.length === 0) return [];
 
-  // When scoped to a servant, first get the IDs of students in their group
-  // so we only process attendance records for those students.
-  let scopedStudentIds = null;
-  if (!isAdminRole(profile)) {
-    const { data: scopedStudents, error: scopeErr } = await applyStudentScope(
-      supabase.from('students').select('id'), profile);
-    if (scopeErr) throw scopeErr;
-    scopedStudentIds = (scopedStudents || []).map(s => s.id);
-    if (scopedStudentIds.length === 0) return [];
-  }
-
-  // Fetch all attendance records for the given Fridays (all statuses so we
-  // can detect streak breaks caused by a حاضر or معتذر record).
-  let recordsQuery = supabase
-    .from('attendance_records')
-    .select('student_id, attendance_date, status')
-    .in('attendance_date', recentFridays);
-  if (scopedStudentIds) {
-    recordsQuery = recordsQuery.in('student_id', scopedStudentIds);
-  }
-  const { data: records, error } = await recordsQuery;
-  if (error) throw error;
+  const records = await fetchScopedAttendance(recentFridays, profile);
   if (!records || records.length === 0) return [];
 
   // Eligibility (single rule, see lib/followUpEligibility.js):
@@ -112,6 +113,9 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
     supabase.from('students').select('id, status, follow_up_baseline_date'), profile);
   if (eligErr) throw eligErr;
   const studentMeta = Object.fromEntries((eligibilityRows || []).map(s => [String(s.id), s]));
+
+  // Session Fridays = dates with any record; a student's gaps/ineligible dates end their streak
+  const sessionDates = sessionDatesFrom(records);
 
   // Group records by student_id, sorted newest → oldest
   const byStudent = {};
@@ -136,12 +140,8 @@ export async function fetchFollowUpCandidates(recentFridays, profile = null) {
     const latestAbsence = recs.find(r => r.status === 'غائب');
     const latestAbsenceDate = latestAbsence ? latestAbsence.attendance_date : null;
 
-    // Consecutive streak: scan newest → oldest, count leading غائب records.
-    let consecutive = 0;
-    for (const r of recs) {
-      if (r.status === 'غائب') consecutive++;
-      else break;
-    }
+    const consecutive = consecutiveAbsences(
+      new Map(recs.map(r => [r.attendance_date, r.status])), sessionDates);
 
     metrics.push({ studentId, totalAbsences, consecutive, latestAbsenceDate });
   }
@@ -914,12 +914,24 @@ export async function fetchAbsentForDate(date = todayISO(), profile = null) {
   studsQuery = applyServantScope(studsQuery, profile);
   const { data: studs, error: e2 } = await studsQuery;
   if (e2) throw e2;
+
+  // Consecutive streak per student from ONE scoped attendance query over the last 8 Fridays
+  const fridays = [date];
+  while (fridays.length < 8) fridays.push(getPreviousFriday(fridays[fridays.length - 1]));
+  const history = await fetchScopedAttendance(fridays, profile);
+  const sessionDates = sessionDatesFrom(history);
+
   // absences dated on/before the reactivation baseline are history, not new follow-ups
   const eligible = (studs || [])
     .filter(s => !isFollowUpExempt(s))   // exempt students never appear as pending follow-up
     .filter(s => eligibleAttendance([{ attendance_date: date }], s).length > 0)
+    .map(s => {
+      const byDate = new Map(eligibleAttendance(
+        history.filter(r => String(r.student_id) === String(s.id)), s).map(r => [r.attendance_date, r.status]));
+      return { ...s, absenceConsecutive: consecutiveAbsences(byDate, sessionDates) };
+    })
     .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ar') || String(a.id).localeCompare(String(b.id)));
-  // priority sort over the full eligible set BEFORE the display limit
+  // priority → streak sort over the full eligible set BEFORE the display limit
   return sortByFollowUpPriority(eligible).slice(0, 10);
 }
 

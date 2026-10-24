@@ -41,10 +41,12 @@ export function followUpStatusBadge(student) {
   }
 }
 
-/** Stable sort by priority; ties keep their incoming order. Returns a new array. */
+/** Priority asc, then absenceConsecutive desc; remaining ties keep their incoming order. Returns a new array. */
 export function sortByFollowUpPriority(list) {
   return list
     .map((s, i) => [s, i])
-    .sort((a, b) => getFollowUpPriority(a[0]) - getFollowUpPriority(b[0]) || a[1] - b[1])
+    .sort((a, b) => getFollowUpPriority(a[0]) - getFollowUpPriority(b[0])
+      || (b[0].absenceConsecutive || 0) - (a[0].absenceConsecutive || 0)
+      || a[1] - b[1])
     .map(([s]) => s);
 }

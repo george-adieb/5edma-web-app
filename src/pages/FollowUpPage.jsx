@@ -1,3 +1,4 @@
+import { absenceStreakLabel } from '../lib/absenceStreak';
 import { followUpStatusBadge } from '../lib/followUpEligibility';
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
@@ -36,12 +37,9 @@ function urgencyLevel(consecutive) {
 
 /** Human-readable Arabic absence duration. */
 function absenceDurationLabel(consecutive, total) {
-  if (consecutive >= 3) return `غياب ${consecutive} أسابيع متتالية`;
-  if (consecutive === 2) return 'غياب أسبوعين متتاليين';
-  if (consecutive === 1) return 'غياب أسبوع واحد';
-  // Fallback: no consecutive streak but has total absences (scattered)
-  if (total === 1) return 'غياب غير متتالي (أسبوع)';
-  return `${total} غيابات متفرقة`;
+  if (consecutive >= 1) return absenceStreakLabel(consecutive);
+  // No confirmed current streak (e.g. a record is missing for the latest session)
+  return total === 1 ? 'غياب غير متتالي (مرة واحدة)' : `${total.toLocaleString('ar-EG')} غيابات متفرقة`;
 }
 
 // How many recent Fridays to look back when building the follow-up list
